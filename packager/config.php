@@ -12,7 +12,7 @@ return array(
         'files' => array(
             //'*' => '/usr/local/php-packager/',
             //'packager/*' => '/usr/local/php-packager/packager/
-            'build/*' => '/',
+            'build/' => '/',
         ),
         'license' => 'GPL v3',
         //'user' => 'heuert', // optional. The user to upload the deb package, `whoami` by default

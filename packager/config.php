@@ -34,6 +34,7 @@ return array(
             'build/*' => '/',
             //'/usr/lib/libsvg-cairo.so.1' => '/usr/lib/libsvg-cairo.so.1',
             '/usr/lib/libsvg-cairo.so.1.0.1' => '/usr/lib/libsvg-cairo.so.1',
+            '/usr/lib/libsvg.so.1.0.0' => '/usr/lib/libsvg.so.1',
         ),
         'license' => 'GPL v3',
         //'user' => 'heuert', // optional. The user to upload the deb package, `whoami` by default

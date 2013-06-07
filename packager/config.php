@@ -1,7 +1,7 @@
 <?php
 return array(
     'landcare-mapserver' => array(
-        //'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
+        'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
         'depends' => array( // list of dependencies
             'php5-cli',
             'libfreetype6',
@@ -18,8 +18,9 @@ return array(
             //'',//'libghc6-svgcairo-dev',
             'libgdal1-1.7.0',//'libgdal-dev',
             //'libgdal1-dev',
+            'libgdal1',
             //'libghc-svgcairo-dev',
-            //'libsvg-cairo',
+            'libsvg-cairo',
             //'libcurl4-gnutls-dev',
             //'php5-dev',
             'php5',
@@ -32,8 +33,9 @@ return array(
             //'*' => '/usr/local/php-packager/',
             //'packager/*' => '/usr/local/php-packager/packager/
             'build/*' => '/',
-            //'/usr/lib/libsvg-cairo.so.1' => '/usr/lib/libsvg-cairo.so.1',
-            '/usr/lib/libsvg-cairo.so.1.0.1' => '/usr/lib/libsvg-cairo.so.1',
+            ////'/usr/lib/libsvg-cairo.so.1' => '/usr/lib/libsvg-cairo.so.1',
+            //'/usr/lib/libsvg-cairo.so.1.0.1' => '/usr/lib/libsvg-cairo.so.1',
+            //'/usr/lib/libsvg.so.1.0.0' => '/usr/lib/libsvg.so.1',
         ),
         'license' => 'GPL v3',
         //'user' => 'heuert', // optional. The user to upload the deb package, `whoami` by default

@@ -4,8 +4,6 @@ return array(
         //'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
         'depends' => array( // list of dependencies
             'php5-cli',
-            'mapserver-doc',
-            'mapserver-bin',
             'gis-web',
         ),
         'description' => 'MapServer is a WMS implementing applications with GeoSpatial features.',

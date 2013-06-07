@@ -1,7 +1,7 @@
 <?php
 return array(
     'landcare-cgi-mapserver' => array(
-        'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
+        //'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
         'depends' => array( // list of dependencies
             'php5-cli',
             'mapserver-doc',
@@ -12,7 +12,7 @@ return array(
         'files' => array(
             //'*' => '/usr/local/php-packager/',
             //'packager/*' => '/usr/local/php-packager/packager/
-            'build/' => '/',
+            'build/*' => '/',
         ),
         'license' => 'GPL v3',
         //'user' => 'heuert', // optional. The user to upload the deb package, `whoami` by default

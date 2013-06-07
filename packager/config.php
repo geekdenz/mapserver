@@ -1,9 +1,30 @@
 <?php
 return array(
-    'landcare-cgi-mapserver' => array(
+    'landcare-mapserver' => array(
         //'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
         'depends' => array( // list of dependencies
             'php5-cli',
+            'libfreetype6',
+            'libpng12-0',
+            'libproj0',
+            'libgif4',
+            'zlib-bin',
+            'libgd-tools',
+            'libcairo2',
+            'libfcgi0ldbl',
+            'libxml2',
+            'libgd2-xpm',
+            'libgeos-3.2.2',//'libgeos-dev',
+            //'',//'libghc6-svgcairo-dev',
+            'libgdal1-1.7.0',//'libgdal-dev',
+            //'libgdal1-dev',
+            //'libghc-svgcairo-dev',
+            //'libsvg-cairo',
+            //'libcurl4-gnutls-dev',
+            //'php5-dev',
+            'php5',
+            //'gcc',
+            //'make',
         ),
         'description' => 'MapServer is a WMS implementing applications with GeoSpatial features.',
         'files' => array(

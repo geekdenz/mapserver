@@ -1,7 +1,7 @@
 <?php
 return array(
     'landcare-mapserver' => array(
-        //'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
+        'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
         'depends' => array( // list of dependencies
             'php5-cli',
             'libfreetype6',

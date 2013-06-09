@@ -18,6 +18,7 @@ return array(
             //'',//'libghc6-svgcairo-dev',
             'libgdal1-1.7.0',//'libgdal-dev',
             //'libgdal1-dev',
+            'libgdal1',
             //'libghc-svgcairo-dev',
             'libsvg-cairo',
             //'libcurl4-gnutls-dev',

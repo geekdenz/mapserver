@@ -16,7 +16,7 @@ return array(
             'libgd2-xpm',
             'libgeos-3.2.2',
             'libsvg-cairo',
-            'libgdal1-1.7.0',
+            'libgdal1',
             'libsvg-cairo',
             'php5',
         ),

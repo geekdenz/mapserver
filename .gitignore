@@ -43,3 +43,4 @@ build/
 packager/deb/
 packager/landcare-cgi-mapserver/
 packager/root/
+packager/landcare-mapserver/*.bash

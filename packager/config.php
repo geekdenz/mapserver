@@ -1,6 +1,6 @@
 <?php
 return array(
-    'landcare-mapserver' => array(
+    'landcare-mapserver-dev' => array(
         'before-package' => 'before-package.php', // gets executed after the setup and before the actual package build
         'depends' => array( // list of dependencies
             'php5-cli',
@@ -22,7 +22,7 @@ return array(
         ),
         'description' => 'MapServer is a WMS implementing applications with GeoSpatial features.',
         'files' => array(
-            'build/*' => '/',
+            'build/root/*' => '/',
         ),
         'license' => 'GPL v3',
         'repository' => 'repository.test.zen.landcareresearch.co.nz:/var/www/dists/precise/main/binary-amd64',

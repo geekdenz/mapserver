@@ -3,3 +3,5 @@ build
 nbproject
 tags
 packager/*/*.bash
+packager/deb/
+packager/root/

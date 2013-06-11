@@ -1269,9 +1269,11 @@ void mapscript_create_shape(shapeObj *shape, parent_object parent, php_layer_obj
     if ((php_shape->shape->numvalues == php_layer->layer->numitems) ||
         (php_shape->shape->numvalues == 0 && php_layer->layer->numitems == -1)) {
       for(i=0; i<php_shape->shape->numvalues; i++) {
-        fprintf(stderr, "Shape It %d %d\n", i, php_shape->shape->numvalues);
+        //fprintf(stderr, "Shape It %d %d\n", i, php_shape->shape->numvalues);
+        mapscript_throw_exception("Shape It: %d, %d" TSRMLS_CC, i, php_shape->shape->numvalues);
         add_assoc_string(php_shape->values, php_layer->layer->items[i], php_shape->shape->values[i], 1);
       }
+        
     } else {
       mapscript_throw_exception("Assertion failed, Could not set shape values: %d, %d" TSRMLS_CC,
                                 php_shape->shape->numvalues, php_layer->layer->numitems);

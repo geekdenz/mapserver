@@ -27,7 +27,7 @@ x("sudo apt-get install -y ". implode(' ', $apt_deps));
 e("Compiling MapServer...");
 x("mkdir build");
 $prefix = "'". trim(`pwd`) ."/build'";
-x("./configure --with-proj --with-geos --with-gdal ".//=/usr/local/bin/gdal-config ".
+x("./configure --enable-debug --with-proj --with-geos --with-gdal ".//=/usr/local/bin/gdal-config ".
     "--with-ogr --with-postgis --with-cairo --with-wmsclient --with-wfs --with-wfsclient --with-wcs --with-curl-config ".
     "--with-xml2-config --with-sos --with-fastcgi --with-freetype --with-gd --with-jpeg --with-png --with-kml --with-threads ".
     "--with-libsvg-cairo --with-php=/usr/bin/php-config ".

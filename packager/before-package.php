@@ -42,7 +42,7 @@ x("cd $prefix && cmake ".
 "-DWITH_LIBSVG_CAIRO=1 -DWITH_PHP=/usr/bin/php-config ".
 "..");
 $root = str_replace("'", '', $prefix .'/root');
-x("cd $prefix && mkdir -p $root && make clean && make DESTDIR=$root ".
+x("cd $prefix && mkdir -p $root && "./*make clean && */."make DESTDIR=$root ".
 "&& make install DESTDIR=$root");
 x("mkdir -p $root/etc/php5/apache2/conf.d");
 file_put_contents($root .'/etc/php5/apache2/conf.d/mapscript.ini', "; loading mapscript extension\n".

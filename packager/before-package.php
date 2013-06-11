@@ -48,4 +48,3 @@ x("mkdir -p $root/etc/php5/apache2/conf.d");
 file_put_contents($root .'/etc/php5/apache2/conf.d/mapscript.ini', "; loading mapscript extension\n".
         "extension=/usr/lib/php5/20090626/php_mapscript.so");
 x("cp -Rp $root/* $pwd/packager/root");
-die();

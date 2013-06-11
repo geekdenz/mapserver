@@ -185,6 +185,9 @@ char path[MS_MAXPATHLEN];
 
 <EXPRESSION_STRING>buffer                      { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_BUFFER); }
 <EXPRESSION_STRING>difference                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_DIFFERENCE); }
+<EXPRESSION_STRING>simplify                    { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_SIMPLIFY); }
+<EXPRESSION_STRING>simplifypt                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_SIMPLIFYPT); }
+<EXPRESSION_STRING>generalize                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_GENERALIZE); }
 
 <EXPRESSION_STRING>intersects                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_COMPARISON_INTERSECTS); }
 <EXPRESSION_STRING>disjoint                    { MS_LEXER_RETURN_TOKEN(MS_TOKEN_COMPARISON_DISJOINT); }
@@ -352,6 +355,7 @@ char path[MS_MAXPATHLEN];
 <INITIAL>scale                                 { MS_LEXER_RETURN_TOKEN(SCALE); }
 <INITIAL>scaledenom                            { MS_LEXER_RETURN_TOKEN(SCALEDENOM); }
 <INITIAL,URL_VARIABLE>scalebar                 { MS_LEXER_RETURN_TOKEN(SCALEBAR); }
+<INITIAL>scaletoken                            { MS_LEXER_RETURN_TOKEN(SCALETOKEN); }
 <INITIAL,URL_STRING>shadowcolor                { MS_LEXER_RETURN_TOKEN(SHADOWCOLOR); }
 <INITIAL,URL_STRING>shadowsize                 { MS_LEXER_RETURN_TOKEN(SHADOWSIZE); }
 <INITIAL>shapepath                             { MS_LEXER_RETURN_TOKEN(SHAPEPATH); }
@@ -380,6 +384,7 @@ char path[MS_MAXPATHLEN];
 <INITIAL>type                                  { MS_LEXER_RETURN_TOKEN(TYPE); }
 <INITIAL,URL_VARIABLE,URL_STRING>units         { MS_LEXER_RETURN_TOKEN(UNITS); }
 <INITIAL>validation                            { MS_LEXER_RETURN_TOKEN(VALIDATION); }
+<INITIAL>values                                { MS_LEXER_RETURN_TOKEN(VALUES); }
 <INITIAL,URL_VARIABLE>web                      { MS_LEXER_RETURN_TOKEN(WEB); }
 <INITIAL,URL_STRING>width                      { MS_LEXER_RETURN_TOKEN(WIDTH); }
 <INITIAL,URL_STRING>wkt                        { MS_LEXER_RETURN_TOKEN(WKT); }
@@ -460,6 +465,7 @@ char path[MS_MAXPATHLEN];
 <INITIAL,URL_STRING>ur                         { MS_LEXER_RETURN_TOKEN(MS_UR); }
 <INITIAL>union                                 { MS_LEXER_RETURN_TOKEN(MS_UNION); }
 <INITIAL>uvraster                              { MS_LEXER_RETURN_TOKEN(MS_UVRASTER); }
+<INITIAL>contour                               { MS_LEXER_RETURN_TOKEN(MS_CONTOUR); }
 <INITIAL>vector                                { MS_LEXER_RETURN_TOKEN(MS_SYMBOL_VECTOR); }
 <INITIAL>wfs                                   { MS_LEXER_RETURN_TOKEN(MS_WFS); }
 <INITIAL>wms                                   { MS_LEXER_RETURN_TOKEN(MS_WMS); }
@@ -495,6 +501,10 @@ char path[MS_MAXPATHLEN];
 <EXPRESSION_STRING>\[shape\] { 
   /* attribute binding - shape (fixed value) */
   return(MS_TOKEN_BINDING_SHAPE);
+}
+<EXPRESSION_STRING>\[map_cellsize\] { 
+  /* attribute binding - cellsize */
+  return(MS_TOKEN_BINDING_MAP_CELLSIZE);
 }
 <EXPRESSION_STRING>\[[^\]]*\] {
   /* attribute binding - numeric (no quotes) */
@@ -574,6 +584,15 @@ char path[MS_MAXPATHLEN];
                                                                          msyystring_buffer_size, msyystring_buffer_ptr);
                                                  strcpy(msyystring_buffer, msyytext);
                                                  return(MS_EXPRESSION);
+                                               }
+
+<INITIAL,URL_STRING>\{.*\}                     {
+                                                 msyytext++;
+                                                 msyytext[strlen(msyytext)-1] = '\0';
+                                                 MS_LEXER_STRING_REALLOC(msyystring_buffer, strlen(msyytext), 
+                                                                         msyystring_buffer_size, msyystring_buffer_ptr);
+                                                 strcpy(msyystring_buffer, msyytext);
+                                                 return(MS_LIST);
                                                }
 
 <INITIAL,URL_STRING>\'|\"                     {

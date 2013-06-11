@@ -322,6 +322,18 @@ int msCGISetMode(mapservObj *mapserv)
     }
   }
 
+  if (mapserv->Mode >= 0)
+  {
+    int disabled = MS_FALSE;
+    const char* enable_modes = msLookupHashTable(&mapserv->map->web.metadata, "ms_enable_modes");
+
+    if (!msOWSParseRequestMetadata(enable_modes, mode, &disabled) && disabled) {
+      /* the current mode is disabled */
+      msSetError(MS_WEBERR, "The specified mode '%s' is not supported by the current map configuration", "msCGISetMode()", mode);
+      return MS_FAILURE;
+    }
+  }
+
   return MS_SUCCESS;
 }
 
@@ -1172,7 +1184,7 @@ int msCGIDispatchQueryRequest(mapservObj *mapserv)
         /* validate the qstring parameter */
         if(msValidateParameter(mapserv->QueryString, msLookupHashTable(&(GET_LAYER(mapserv->map, mapserv->SelectLayerIndex)->validation), "qstring"),
                                msLookupHashTable(&(mapserv->map->web.validation), "qstring"),
-                               msLookupHashTable(&(GET_LAYER(mapserv->map, mapserv->SelectLayerIndex)->metadata), "qstring_validation_pattern"), NULL) != MS_SUCCESS) {
+                               NULL, NULL) != MS_SUCCESS) {
           msSetError(MS_WEBERR, "Parameter 'qstring' value fails to validate.", "mapserv()");
           return MS_FAILURE;
         }
@@ -1264,7 +1276,7 @@ int msCGIDispatchQueryRequest(mapservObj *mapserv)
         /* validate the qstring parameter */
         if(msValidateParameter(mapserv->QueryString, msLookupHashTable(&(GET_LAYER(mapserv->map, mapserv->QueryLayerIndex)->validation), "qstring"),
                                msLookupHashTable(&(mapserv->map->web.validation), "qstring"),
-                               msLookupHashTable(&(GET_LAYER(mapserv->map, mapserv->QueryLayerIndex)->metadata), "qstring_validation_pattern"), NULL) != MS_SUCCESS) {
+                               NULL, NULL) != MS_SUCCESS) {
           msSetError(MS_WEBERR, "Parameter 'qstring' value fails to validate.", "mapserv()");
           return MS_FAILURE;
         }
@@ -1566,7 +1578,7 @@ int msCGIDispatchLegendIconRequest(mapservObj *mapserv)
   /* drop this reference to output format */
   msApplyOutputFormat(&format, NULL, MS_NOOVERRIDE, MS_NOOVERRIDE, MS_NOOVERRIDE);
 
-  if(msDrawLegendIcon(mapserv->map, GET_LAYER(mapserv->map, layerindex), GET_LAYER(mapserv->map, layerindex)->class[classindex], mapserv->map->legend.keysizex,  mapserv->map->legend.keysizey, img, 0, 0) != MS_SUCCESS)
+  if(msDrawLegendIcon(mapserv->map, GET_LAYER(mapserv->map, layerindex), GET_LAYER(mapserv->map, layerindex)->class[classindex], mapserv->map->legend.keysizex,  mapserv->map->legend.keysizey, img, 0, 0, MS_TRUE) != MS_SUCCESS)
     return MS_FAILURE;
 
   if(mapserv->sendheaders) {

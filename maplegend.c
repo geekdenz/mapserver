@@ -41,10 +41,12 @@
  * this function
  */
 int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
-                     int width, int height, imageObj *image, int dstX, int dstY)
+                     int width, int height, imageObj *image, int dstX, int dstY,
+                     int scale_independant)
 {
   int i, type, hasmarkersymbol;
   double offset;
+  double polygon_contraction = 0.5; /* used to account for the width of a polygon's outline */
   shapeObj box, zigzag;
   pointObj marker;
   char szPath[MS_MAXPATHLEN];
@@ -95,25 +97,7 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
     clip.miny = dstY;
     renderer->setClip(image_draw,clip);
   }
-
-  /* initialize the box used for polygons and for outlines */
-  box.line = (lineObj *)msSmallMalloc(sizeof(lineObj));
-  box.numlines = 1;
-  box.line[0].point = (pointObj *)msSmallMalloc(sizeof(pointObj)*5);
-  box.line[0].numpoints = 5;
-
-  box.line[0].point[0].x = dstX + 0.5;
-  box.line[0].point[0].y = dstY + 0.5;
-  box.line[0].point[1].x = dstX + width - 0.5;
-  box.line[0].point[1].y = dstY + 0.5;
-  box.line[0].point[2].x = dstX + width - 0.5;
-  box.line[0].point[2].y = dstY + height - 0.5;
-  box.line[0].point[3].x = dstX + 0.5;
-  box.line[0].point[3].y = dstY + height - 0.5;
-  box.line[0].point[4].x = box.line[0].point[0].x;
-  box.line[0].point[4].y = box.line[0].point[0].y;
-  box.line[0].numpoints = 5;
-
+  
   /* if the class has a keyimage, treat it as a point layer
    * (the keyimage will be treated there) */
   if(theclass->keyimage != NULL) {
@@ -126,11 +110,32 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
       for(i=0; i<theclass->numstyles; i++) {
         if(MS_VALID_COLOR(theclass->styles[i]->color)) { /* there is a fill */
           type = MS_LAYER_POLYGON;
-          break;
+        }
+        if(MS_VALID_COLOR(theclass->styles[i]->outlinecolor)) { /* there is an outline */
+          polygon_contraction = MS_MAX(polygon_contraction, theclass->styles[i]->width / 2.0);
         }
       }
     }
   }
+
+  /* initialize the box used for polygons and for outlines */
+  box.line = (lineObj *)msSmallMalloc(sizeof(lineObj));
+  box.numlines = 1;
+  box.line[0].point = (pointObj *)msSmallMalloc(sizeof(pointObj)*5);
+  box.line[0].numpoints = 5;
+
+  box.line[0].point[0].x = dstX + polygon_contraction;
+  box.line[0].point[0].y = dstY + polygon_contraction;
+  box.line[0].point[1].x = dstX + width - polygon_contraction;
+  box.line[0].point[1].y = dstY + polygon_contraction;
+  box.line[0].point[2].x = dstX + width - polygon_contraction;
+  box.line[0].point[2].y = dstY + height - polygon_contraction;
+  box.line[0].point[3].x = dstX + polygon_contraction;
+  box.line[0].point[3].y = dstY + height - polygon_contraction;
+  box.line[0].point[4].x = box.line[0].point[0].x;
+  box.line[0].point[4].y = box.line[0].point[0].y;
+  box.line[0].numpoints = 5;
+
 
   /*
   ** now draw the appropriate color/symbol/size combination
@@ -141,13 +146,23 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
       marker.y = dstY + MS_NINT(height / 2.0);
       hasmarkersymbol = 0;
       for(i=0; i<theclass->numstyles; i++) {
-          if (theclass->styles[i]->symbol < map->symbolset.numsymbols && theclass->styles[i]->symbol > 0) {
-             hasmarkersymbol = 1;
-             break;
-          }
+        if(!scale_independant && map->scaledenom > 0) {
+          styleObj *lp = theclass->styles[i];
+          if((lp->maxscaledenom > 0) && (map->scaledenom > lp->maxscaledenom)) continue;
+          if((lp->minscaledenom > 0) && (map->scaledenom <= lp->minscaledenom)) continue;
+        }
+        if (theclass->styles[i]->symbol < map->symbolset.numsymbols && theclass->styles[i]->symbol > 0) {
+           hasmarkersymbol = 1;
+           break;
+        }
       }
       if (hasmarkersymbol) {
         for(i=0; i<theclass->numstyles; i++)
+          if(!scale_independant && map->scaledenom > 0) {
+            styleObj *lp = theclass->styles[i];
+            if((lp->maxscaledenom > 0) && (map->scaledenom > lp->maxscaledenom)) continue;
+            if((lp->minscaledenom > 0) && (map->scaledenom <= lp->minscaledenom)) continue;
+          }
           msDrawMarkerSymbol(&map->symbolset, image_draw, &marker, theclass->styles[i], lp->scalefactor);
       } else if (theclass->labels && theclass->numlabels > 0) {
         labelObj *label = theclass->labels[0]; /* use the first label definition */
@@ -156,12 +171,14 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
         int lpos = label->position;
         int loffsetx = label->offsetx;
         int loffsety = label->offsety;
+        int lstatus = label->status;
 
         label->offsetx = 0;
         label->offsety = 0;
         label->angle = 0;
         label->position = MS_CC;
         if (label->type == MS_TRUETYPE) label->size = height;
+        label->status = MS_ON;
         msDrawLabel(map, image_draw, marker, (char*)"Az", label,1.0);
 
         label->size = lsize;
@@ -169,6 +186,7 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
         label->angle = langle;
         label->offsetx = loffsetx;
         label->offsety = loffsety;
+        label->status = lstatus;
       }
       break;
     case MS_LAYER_POINT:
@@ -200,8 +218,14 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
         msDrawMarkerSymbol(&map->symbolset,image_draw,&marker,&imgStyle,lp->scalefactor);
         /* TO DO: we may want to handle this differently depending on the relative size of the keyimage */
       } else {
-        for(i=0; i<theclass->numstyles; i++)
+        for(i=0; i<theclass->numstyles; i++) {
+          if(!scale_independant && map->scaledenom > 0) {
+            styleObj *lp = theclass->styles[i];
+            if((lp->maxscaledenom > 0) && (map->scaledenom > lp->maxscaledenom)) continue;
+            if((lp->minscaledenom > 0) && (map->scaledenom <= lp->minscaledenom)) continue;
+          }
           msDrawMarkerSymbol(&map->symbolset, image_draw, &marker, theclass->styles[i], lp->scalefactor);
+        }
       }
       break;
     case MS_LAYER_LINE:
@@ -228,8 +252,20 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
       zigzag.line[0].point[3].x = dstX + width - offset;
       zigzag.line[0].point[3].y = dstY + offset;
 
-      for(i=0; i<theclass->numstyles; i++)
-        msDrawLineSymbol(&map->symbolset, image_draw, &zigzag, theclass->styles[i], lp->scalefactor);
+      for(i=0; i<theclass->numstyles; i++) {
+        if(!scale_independant && map->scaledenom > 0) {
+          styleObj *lp = theclass->styles[i];
+          if((lp->maxscaledenom > 0) && (map->scaledenom > lp->maxscaledenom)) continue;
+          if((lp->minscaledenom > 0) && (map->scaledenom <= lp->minscaledenom)) continue;
+        }
+        if (theclass->styles[i]->_geomtransform.type == MS_GEOMTRANSFORM_NONE ||
+            theclass->styles[i]->_geomtransform.type == MS_GEOMTRANSFORM_LABELPOINT ||
+            theclass->styles[i]->_geomtransform.type == MS_GEOMTRANSFORM_LABELPOLY)
+          msDrawLineSymbol(&map->symbolset, image_draw, &zigzag, theclass->styles[i], lp->scalefactor);
+        else
+          msDrawTransformedShape(map, &map->symbolset, image_draw, &zigzag, 
+                                        theclass->styles[i], lp->scalefactor);
+      }
 
       free(zigzag.line[0].point);
       free(zigzag.line);
@@ -238,8 +274,21 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
     case MS_LAYER_RASTER:
     case MS_LAYER_CHART:
     case MS_LAYER_POLYGON:
+      for(i=0; i<theclass->numstyles; i++) {
+        if(!scale_independant && map->scaledenom > 0) {
+          styleObj *lp = theclass->styles[i];
+          if((lp->maxscaledenom > 0) && (map->scaledenom > lp->maxscaledenom)) continue;
+          if((lp->minscaledenom > 0) && (map->scaledenom <= lp->minscaledenom)) continue;
+        }
+      }
       for(i=0; i<theclass->numstyles; i++)
-        msDrawShadeSymbol(&map->symbolset, image_draw, &box, theclass->styles[i], lp->scalefactor);
+        if (theclass->styles[i]->_geomtransform.type == MS_GEOMTRANSFORM_NONE ||
+            theclass->styles[i]->_geomtransform.type == MS_GEOMTRANSFORM_LABELPOINT ||
+            theclass->styles[i]->_geomtransform.type == MS_GEOMTRANSFORM_LABELPOLY)
+          msDrawShadeSymbol(&map->symbolset, image_draw, &box, theclass->styles[i], lp->scalefactor);
+        else
+          msDrawTransformedShape(map, &map->symbolset, image_draw, &box,
+                                 theclass->styles[i], lp->scalefactor);
       break;
     default:
       return MS_FAILURE;
@@ -304,7 +353,7 @@ int msDrawLegendIcon(mapObj *map, layerObj *lp, classObj *theclass,
 }
 
 
-imageObj *msCreateLegendIcon(mapObj* map, layerObj* lp, classObj* class, int width, int height)
+imageObj *msCreateLegendIcon(mapObj* map, layerObj* lp, classObj* class, int width, int height, int scale_independant)
 {
   imageObj *image;
   outputFormatObj *format = NULL;
@@ -340,10 +389,10 @@ imageObj *msCreateLegendIcon(mapObj* map, layerObj* lp, classObj* class, int wid
     msClearLayerPenValues(lp); /* just in case the mapfile has already been processed */
 #endif
     if (class) {
-      msDrawLegendIcon(map, lp, class, width, height, image, 0, 0);
+      msDrawLegendIcon(map, lp, class, width, height, image, 0, 0, scale_independant);
     } else {
       for (i=0; i<lp->numclasses; i++) {
-        msDrawLegendIcon(map, lp, lp->class[i], width, height, image, 0, 0);
+        msDrawLegendIcon(map, lp, lp->class[i], width, height, image, 0, 0, scale_independant);
       }
     }
   }
@@ -590,7 +639,7 @@ imageObj *msDrawLegend(mapObj *map, int scale_independent)
       map->cellsize = msAdjustExtent(&(map->extent), map->width, map->height);
       cur->layer->scalefactor = (msInchesPerUnit(cur->layer->sizeunits,0)/msInchesPerUnit(map->units,0)) / map->cellsize;
     }
-    if(msDrawLegendIcon(map, cur->layer, cur->theclass,  map->legend.keysizex,  map->legend.keysizey, image, HMARGIN, (int) pnt.y) != MS_SUCCESS)
+    if(msDrawLegendIcon(map, cur->layer, cur->theclass,  map->legend.keysizex,  map->legend.keysizey, image, HMARGIN, (int) pnt.y, scale_independent) != MS_SUCCESS)
       return NULL;
 
     /*
@@ -632,14 +681,9 @@ int msEmbedLegend(mapObj *map, imageObj *img)
   pointObj point;
   imageObj *image = NULL;
   symbolObj *legendSymbol;
+  char* imageType = NULL;
 
   rendererVTableObj *renderer;
-
-  if(!MS_RENDERER_PLUGIN(map->outputformat) || !MS_MAP_RENDERER(map)->supports_pixel_buffer) {
-    msSetError(MS_MISCERR, "unsupported output format", "msEmbedLegend()");
-    return MS_FAILURE;
-  }
-  renderer = MS_MAP_RENDERER(map);
 
   s = msGetSymbolIndex(&(map->symbolset), "legend", MS_FALSE);
   if(s != -1)
@@ -652,9 +696,25 @@ int msEmbedLegend(mapObj *map, imageObj *img)
   map->symbolset.numsymbols++;
   initSymbol(legendSymbol);
 
+  if(!MS_RENDERER_PLUGIN(map->outputformat) || !MS_MAP_RENDERER(map)->supports_pixel_buffer) {
+    imageType = msStrdup(map->imagetype); /* save format */
+    if MS_DRIVER_CAIRO(map->outputformat)
+      map->outputformat = msSelectOutputFormat( map, "cairopng" );
+    else
+      map->outputformat = msSelectOutputFormat( map, "png" );
+    
+    msInitializeRendererVTable(map->outputformat);
+  }
+  renderer = MS_MAP_RENDERER(map);
+
   /* render the legend. */
   image = msDrawLegend(map, MS_FALSE);
   if( image == NULL ) return -1;
+
+  if (imageType) {
+    map->outputformat = msSelectOutputFormat( map, imageType ); /* restore format */
+    msFree(imageType);
+  }
 
   /* copy renderered legend image into symbol */
   legendSymbol->pixmap_buffer = calloc(1,sizeof(rasterBufferObj));

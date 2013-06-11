@@ -34,6 +34,7 @@
 
 /* There is a dependency to GDAL/OGR for the GML driver and MiniXML parser */
 #include "cpl_minixml.h"
+#include "cpl_conv.h"
 
 #include "mapogcfilter.h"
 #include "mapowscommon.h"
@@ -3170,7 +3171,7 @@ int msWFSParseRequest(mapObj *map, cgiRequestObj *request, owsRequestObj *ows_re
           while (psQuery &&  psQuery->pszValue &&
                  strcasecmp(psQuery->pszValue, "Query") == 0) {
             /* get SRS */
-            pszValue = CPLGetXMLValue(psGetFeature,  "srsName",
+            pszValue = CPLGetXMLValue(psQuery,  "srsName",
                                       NULL);
             if (pszValue)
               wfsparams->pszSrs = msStrdup(pszValue);
@@ -3245,14 +3246,17 @@ int msWFSParseRequest(mapObj *map, cgiRequestObj *request, owsRequestObj *ows_re
             psFilter = CPLGetXMLNode(psQuery, "Filter");
 
             if (psFilter) {
-              if (!bMultiLayer)
-                wfsparams->pszFilter = CPLSerializeXMLTree(psFilter);
+              if (!bMultiLayer) {
+                char* pszCPLTmp = CPLSerializeXMLTree(psFilter);
+                wfsparams->pszFilter = msStrdup(pszCPLTmp);
+                CPLFree(pszCPLTmp);
+              }
               else {
                 pszSerializedFilter = CPLSerializeXMLTree(psFilter);
                 pszTmp = (char *)msSmallMalloc(sizeof(char)*
                                                (strlen(pszSerializedFilter)+3));
                 sprintf(pszTmp, "(%s)", pszSerializedFilter);
-                free(pszSerializedFilter);
+                CPLFree(pszSerializedFilter);
 
                 if (wfsparams->pszFilter == NULL)
                   wfsparams->pszFilter = msStrdup(pszTmp);
@@ -3352,7 +3356,7 @@ int msWFSParseRequest(mapObj *map, cgiRequestObj *request, owsRequestObj *ows_re
 
       }/* end of DescibeFeatureType */
     }
-#endif /*USE_LIBXML2_WFS*/
+#endif /*WFS_USE_LIBXML2*/
 
   }
 #endif

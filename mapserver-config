@@ -1,0 +1,56 @@
+#!/bin/sh
+CONFIG_LIBS="-L/usr/lib/x86_64-linux-gnu -lfreetype -lz -L/usr/lib/x86_64-linux-gnu -lgd   -lproj -ljpeg -lpng -lgif  -L/usr/lib -lgdal -L/usr/lib -lpq  -L/usr/lib/x86_64-linux-gnu -lcurl -Wl,-Bsymbolic-functions -Wl,-z,relro  -L/usr/lib -lgeos_c -lpthread -lc    -L/usr/lib -lxml2  -lm -ldl -lstdc++  -lfreetype -lz -lcairo -lpng12   -lsvg-cairo -lsvg -lpng -ljpeg -lz -lcairo -lxml2   "
+CONFIG_DEP_LIBS=""
+CONFIG_CFLAGS="-g    -Wall -Wdeclaration-after-statement  -DUSE_FASTCGI -DUSE_SVG_CAIRO -DUSE_CAIRO     -DUSE_WMS_LYR -DUSE_WFS_LYR -DUSE_SOS_SVR -DUSE_LIBXML2 -DUSE_CURL -DUSE_CURLOPT_PROXYAUTH -DUSE_KML  -DUSE_WCS_SVR -DUSE_WFS_SVR -DUSE_WMS_SVR   -DUSE_POSTGIS -DPOSTGIS_HAS_SERVER_VERSION -DUSE_GDAL -DUSE_OGR -DUSE_GEOS  -DHAVE_SYNC_FETCH_AND_ADD -DUSE_THREAD -DUSE_PROJ   -DUSE_GD  -DUSE_GD_PNG -DUSE_GD_JPEG -DUSE_GD_GIF -DUSE_ICONV -DUSE_JPEG -DUSE_GIF -DUSE_PNG -DUSE_FREETYPE -DHAVE_VSNPRINTF -DNEED_STRLCPY -DNEED_STRLCAT -DNEED_STRRSTR   -DDISABLE_CVSID  -I/usr/include/freetype2      -Irenderers/agg/include      -I/usr/include/gdal -I/usr/include/postgresql    -I/usr/include   -I/usr/include/libxml2  -I/usr/include/cairo -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -I/usr/include/pixman-1 -I/usr/include/freetype2 -I/usr/include/libpng12   -I/usr/include/cairo -I/usr/include/libxml2 -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -I/usr/include/pixman-1 -I/usr/include/freetype2 -I/usr/include/libpng12    "
+CONFIG_DEFINES="-DUSE_FASTCGI -DUSE_SVG_CAIRO -DUSE_CAIRO     -DUSE_WMS_LYR -DUSE_WFS_LYR -DUSE_SOS_SVR -DUSE_LIBXML2 -DUSE_CURL -DUSE_CURLOPT_PROXYAUTH -DUSE_KML  -DUSE_WCS_SVR -DUSE_WFS_SVR -DUSE_WMS_SVR   -DUSE_POSTGIS -DPOSTGIS_HAS_SERVER_VERSION -DUSE_GDAL -DUSE_OGR -DUSE_GEOS  -DHAVE_SYNC_FETCH_AND_ADD -DUSE_THREAD -DUSE_PROJ   -DUSE_GD  -DUSE_GD_PNG -DUSE_GD_JPEG -DUSE_GD_GIF -DUSE_ICONV -DUSE_JPEG -DUSE_GIF -DUSE_PNG -DUSE_FREETYPE -DHAVE_VSNPRINTF -DNEED_STRLCPY -DNEED_STRLCAT -DNEED_STRRSTR   -DDISABLE_CVSID "
+CONFIG_INCLUDES="-I/usr/include/freetype2      -Irenderers/agg/include      -I/usr/include/gdal -I/usr/include/postgresql    -I/usr/include   -I/usr/include/libxml2  -I/usr/include/cairo -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -I/usr/include/pixman-1 -I/usr/include/freetype2 -I/usr/include/libpng12   -I/usr/include/cairo -I/usr/include/libxml2 -I/usr/include/glib-2.0 -I/usr/lib/x86_64-linux-gnu/glib-2.0/include -I/usr/include/pixman-1 -I/usr/include/freetype2 -I/usr/include/libpng12    "
+CONFIG_VERSION="6.2.1"
+usage()
+{
+	cat <<EOF
+Usage: mapserver-config [OPTIONS]
+Options:
+	[--libs]
+	[--dep-libs]
+	[--cflags]
+	[--defines]
+	[--includes]
+	[--version]
+EOF
+	exit $1
+}
+
+if test $# -eq 0; then
+	usage 1 1>&2
+fi
+
+case $1 in 
+  --libs)
+    echo $CONFIG_LIBS
+    ;;
+
+  --defines)
+    echo $CONFIG_DEFINES
+    ;;
+
+  --includes)
+    echo $CONFIG_INCLUDES
+    ;;
+
+  --dep-libs)
+    echo $CONFIG_DEP_LIBS
+    ;;
+
+  --cflags)
+    echo $CONFIG_CFLAGS
+    ;;
+
+  --version)
+    echo $CONFIG_VERSION
+    ;;
+
+  *)
+    usage 1 1>&2
+    ;;
+
+esac

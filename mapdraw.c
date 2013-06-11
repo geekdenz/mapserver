@@ -776,8 +776,11 @@ int msDrawLayer(mapObj *map, layerObj *layer, imageObj *image)
     renderer->startLayer(image_draw,map,layer);
   } else if (MS_RENDERER_PLUGIN(image_draw->format)) {
     rendererVTableObj *renderer = MS_IMAGE_RENDERER(image_draw);
-    if (layer->mask || (layer->opacity > 0 && layer->opacity < 100)) {
-      if (!renderer->supports_transparent_layers) {
+    if ((layer->mask && layer->connectiontype!=MS_WMS && layer->type != MS_LAYER_RASTER) || (layer->opacity > 0 && layer->opacity < 100)) {
+      /* masking occurs at the pixel/layer level for raster images, so we don't need to create a temporary image
+       in these cases
+       */
+      if (layer->mask || !renderer->supports_transparent_layers) {
         image_draw = msImageCreate(image->width, image->height,
                                    image->format, image->imagepath, image->imageurl, map->resolution, map->defresolution, NULL);
         if (!image_draw) {
@@ -1041,7 +1044,7 @@ int msDrawVectorLayer(mapObj *map, layerObj *layer, imageObj *image)
     if (layer->type == MS_LAYER_LINE && msLayerGetProcessingKey(layer, "POLYLINE_NO_CLIP")) {
       drawmode |= MS_DRAWMODE_UNCLIPPEDLINES;
     }
-    
+  
     if (cache) {
       styleObj *pStyle = layer->class[shape.classindex]->styles[0];
       colorObj tmp;
@@ -1467,14 +1470,21 @@ msDrawRasterLayerPlugin( mapObj *map, layerObj *layer, imageObj *image)
  */
 int msDrawRasterLayer(mapObj *map, layerObj *layer, imageObj *image)
 {
-  if (image && map && layer) {
-    if( MS_RENDERER_PLUGIN(image->format) ) {
-      return msDrawRasterLayerPlugin(map, layer, image);
-    } else if( MS_RENDERER_RAWDATA(image->format) )
-      return msDrawRasterLayerLow(map, layer, image, NULL);
+  
+  int rv = MS_FAILURE;
+  if (!image || !map || !layer) {
+    return rv;
   }
 
-  return MS_FAILURE;
+  /* RFC-86 Scale dependant token replacements*/
+  rv = msLayerApplyScaletokens(layer,(layer->map)?layer->map->scaledenom:-1);
+  if (rv != MS_SUCCESS) return rv;
+  if( MS_RENDERER_PLUGIN(image->format) )
+    rv = msDrawRasterLayerPlugin(map, layer, image);
+  else if( MS_RENDERER_RAWDATA(image->format) )
+    rv = msDrawRasterLayerLow(map, layer, image, NULL);
+  msLayerRestoreFromScaletokens(layer);
+  return rv;
 }
 
 /**
@@ -2243,7 +2253,7 @@ int msDrawPoint(mapObj *map, layerObj *layer, pointObj *point, imageObj *image, 
         if(msScaleInBounds(map->scaledenom, theclass->styles[s]->minscaledenom, theclass->styles[s]->maxscaledenom))
           msDrawMarkerSymbol(&map->symbolset, image, point, theclass->styles[s], layer->scalefactor);
       }
-      if(labeltext && (strlen(labeltext)>0)) {
+      if(labeltext) {
         if(layer->labelcache) {
           if(msAddLabel(map, label, layer->index, classindex, NULL, point, NULL, -1) != MS_SUCCESS) return(MS_FAILURE);
         } else
@@ -2947,12 +2957,17 @@ int msDrawLabelCache(imageObj *image, mapObj *map)
                   /* TODO: treat the case with multiple labels and/or leader lines */
                 }
 
-                /* apply offset and buffer settings */
-                label_offset_x = labelPtr->offsetx*scalefactor;
-                label_offset_y = labelPtr->offsety*scalefactor;
-                label_buffer = (labelPtr->buffer*image->resolutionfactor);
-                label_mindistance = (labelPtr->mindistance*image->resolutionfactor);
-
+                 /* apply offset and buffer settings */
+                 if(labelPtr->anglemode != MS_FOLLOW) {
+                   label_offset_x = labelPtr->offsetx*scalefactor;
+                   label_offset_y = labelPtr->offsety*scalefactor;
+                 } else {
+                   label_offset_x = 0;
+                   label_offset_y = 0;
+                 }
+                 label_buffer = (labelPtr->buffer*image->resolutionfactor);
+                 label_mindistance = (labelPtr->mindistance*image->resolutionfactor);
+                 
 #ifdef oldcode
                 /* adjust the baseline (see #1449) */
                 if(labelPtr->type == MS_TRUETYPE) {

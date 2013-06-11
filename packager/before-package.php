@@ -28,7 +28,8 @@ $apt_deps = array(
 x("sudo apt-get install -y ". implode(' ', $apt_deps));
 e("Compiling MapServer...");
 x("mkdir build");
-$prefix = "'". trim(`pwd`) ."/build'";
+$pwd = trim(`pwd`);
+$prefix = "'$pwd/build'";
 //x("./configure --enable-debug --with-proj --with-geos --with-gdal ".//=/usr/local/bin/gdal-config ".
     //"--with-ogr --with-postgis --with-cairo --with-wmsclient --with-wfs --with-wfsclient --with-wcs --with-curl-config ".
     //"--with-xml2-config --with-sos --with-fastcgi --with-freetype --with-gd --with-jpeg --with-png --with-kml --with-threads ".
@@ -46,3 +47,4 @@ x("cd $prefix && mkdir -p $root && make clean && make DESTDIR=$root ".
 x("mkdir -p $root/etc/php5/apache2/conf.d");
 file_put_contents($root .'/etc/php5/apache2/conf.d/mapscript.ini', "; loading mapscript extension\n".
         "extension=/usr/lib/php5/20090626/php_mapscript.so");
+x("cp -Rp $root $pwd/packager/root");

@@ -1272,10 +1272,10 @@ void mapscript_create_shape(shapeObj *shape, parent_object parent, php_layer_obj
       for(i=0; i<php_shape->shape->numvalues; i++) {
         fprintf(stderr, "Shape It: %d %d\n", i, php_shape->shape->numvalues);
         add_assoc_string(php_shape->values, php_layer->layer->items[i], php_shape->shape->values[i], 1);
-        fprintf(stderr, "String It: i=%d lval=%d str=%s\n",
+        fprintf(stderr, "String It: i=%d lval=%d str=\n",
 		i,
-		php_shape->shape->values[i].value.lval,
-		php_shape->shape->values[i].value.str.val);
+		php_shape->shape->values[i].value.lval);//,
+		//php_shape->shape->values[i].value.str.val);
       }
       //mapscript_throw_exception(str TSRMLS_CC, i, php_shape->shape->numvalues);
         

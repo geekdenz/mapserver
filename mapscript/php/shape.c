@@ -1270,7 +1270,7 @@ void mapscript_create_shape(shapeObj *shape, parent_object parent, php_layer_obj
         (php_shape->shape->numvalues == 0 && php_layer->layer->numitems == -1)) {
       char str[1000];
       for(i=0; i<php_shape->shape->numvalues; i++) {
-        fprintf(stderr, "Shape It: %d %d\n", i, php_shape->shape->numvalues);
+        fprintf(stderr, "Shape It: %d %d\n", i, php_shape->shape->numvalues);//asd
         add_assoc_string(php_shape->values, php_layer->layer->items[i], php_shape->shape->values[i], 1);
         fprintf(stderr, "String It: i=%d str=%s\n",
 		i,

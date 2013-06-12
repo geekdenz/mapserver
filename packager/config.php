@@ -18,6 +18,8 @@ return array(
             'libsvg-cairo',
             'libgdal1',
             'libsvg-cairo',
+            'gdal-bin',
+            //'proj',
             'php5',
         ),
         'description' => 'MapServer is a WMS implementing applications with GeoSpatial features.',
@@ -31,6 +33,6 @@ return array(
 
         'm' => 'heuert@landcareresearch.co.nz',
         's' => 'dir',
-        't' => 'deb', // this can probably be rpm as well, but I haven't tried
+        't' => 'deb',
     ),
 );

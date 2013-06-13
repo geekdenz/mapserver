@@ -496,7 +496,7 @@ static void InitShapeAttributes(layerObj* layer, clusterInfo* base)
       if (base->group)
         base->shape.values[i] = msStrdup(base->group);
       else
-        base->shape.values[i] = msStrdup("");
+        base->shape.values[i] = msStrdup("HALELUYA");
     } else if (EQUALN(layer->items[i], "Count:", 6)) {
       if (base->shape.values[i])
         msFree(base->shape.values[i]);
@@ -1048,7 +1048,7 @@ int RebuildClusters(layerObj *layer, int isQuery)
     /* collecting the shapes of the cluster */
     collectClusterShapes(layerinfo, layerinfo->root, layerinfo->current);
 
-    if (1 || layer->debug >= MS_DEBUGLEVEL_VVV) {
+    if (layer->debug >= MS_DEBUGLEVEL_VVV) {
       msDebug("processing cluster %p: rank=%lf fcount=%d ncoll=%d nfin=%d nfins=%d nflt=%d bounds={%lf %lf %lf %lf}\n", layerinfo->current, layerinfo->rank, layerinfo->current->numsiblings + 1,
               layerinfo->current->numcollected, layerinfo->numFinalized, layerinfo->numFinalizedSiblings,
               layerinfo->numFiltered, layerinfo->current->bounds.minx, layerinfo->current->bounds.miny,

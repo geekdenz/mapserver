@@ -137,6 +137,7 @@ extern int yyparse(parseObj *p);
 /* evaluate the filter expression */
 int msClusterEvaluateFilter(expressionObj* expression, shapeObj *shape)
 {
+	fprintf(stderr, "msClusterEvaluateFilter\n");
   if (expression->type == MS_EXPRESSION) {
     int status;
     parseObj p;
@@ -585,6 +586,7 @@ static int BuildFeatureAttributes(layerObj* layer, msClusterLayerInfo* layerinfo
 /* traverse the quadtree to find the best renking cluster */
 static void findBestCluster(layerObj* layer, msClusterLayerInfo* layerinfo, clusterTreeNode *node)
 {
+	fprintf(stderr, "findBestCluster\n");
   int i;
   double rank;
   clusterInfo* s = node->shapes;

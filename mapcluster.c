@@ -608,7 +608,7 @@ static void findBestCluster(layerObj* layer, msClusterLayerInfo* layerinfo, clus
       layerinfo->current = s;
       layerinfo->rank = rank;
     }
-		fprintf(stderr, "Shape Info: sib=%d col=%d rem=%d index=%d", numsiblings, numcollected, numremoved, index);
+		fprintf(stderr, "Shape Info: sib=%d col=%d rem=%d index=%d", s->numsiblings, s->numcollected, s->numremoved, s->index);
     s = s->next;
   }
 

@@ -586,7 +586,6 @@ static int BuildFeatureAttributes(layerObj* layer, msClusterLayerInfo* layerinfo
 /* traverse the quadtree to find the best renking cluster */
 static void findBestCluster(layerObj* layer, msClusterLayerInfo* layerinfo, clusterTreeNode *node)
 {
-	fprintf(stderr, "findBestCluster\n");
   int i;
   double rank;
   clusterInfo* s = node->shapes;
@@ -609,6 +608,7 @@ static void findBestCluster(layerObj* layer, msClusterLayerInfo* layerinfo, clus
       layerinfo->current = s;
       layerinfo->rank = rank;
     }
+		fprintf(stderr, "Shape Info: sib=%d col=%d rem=%d index=%d", numsiblings, numcollected, numremoved, index);
     s = s->next;
   }
 

@@ -590,12 +590,10 @@ static void findBestCluster(layerObj* layer, msClusterLayerInfo* layerinfo, clus
   double rank;
   clusterInfo* s = node->shapes;
   while (s) {
-	  /*
     if (s->filter < 0 && layer->cluster.filter.string != NULL) {
       InitShapeAttributes(layer, s);
       s->filter = msClusterEvaluateFilter(&layer->cluster.filter, &s->shape);
     }
-		*/
 
     if (s->numsiblings == 0 || s->filter == 0) {
       /* individual or filtered shapes must be removed for sure */
@@ -610,7 +608,7 @@ static void findBestCluster(layerObj* layer, msClusterLayerInfo* layerinfo, clus
       layerinfo->current = s;
       layerinfo->rank = rank;
     }
-		fprintf(stderr, "Shape Info: sib=%d col=%d rem=%d index=%d\n", s->numsiblings, s->numcollected, s->numremoved, s->index);
+		/* fprintf(stderr, "Shape Info: sib=%d col=%d rem=%d index=%d\n", s->numsiblings, s->numcollected, s->numremoved, s->index); */
     s = s->next;
   }
 
@@ -1050,7 +1048,7 @@ int RebuildClusters(layerObj *layer, int isQuery)
     /* collecting the shapes of the cluster */
     collectClusterShapes(layerinfo, layerinfo->root, layerinfo->current);
 
-    if (layer->debug >= MS_DEBUGLEVEL_VVV) {
+    if (1 || layer->debug >= MS_DEBUGLEVEL_VVV) {
       msDebug("processing cluster %p: rank=%lf fcount=%d ncoll=%d nfin=%d nfins=%d nflt=%d bounds={%lf %lf %lf %lf}\n", layerinfo->current, layerinfo->rank, layerinfo->current->numsiblings + 1,
               layerinfo->current->numcollected, layerinfo->numFinalized, layerinfo->numFinalizedSiblings,
               layerinfo->numFiltered, layerinfo->current->bounds.minx, layerinfo->current->bounds.miny,

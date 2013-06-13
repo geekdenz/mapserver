@@ -481,6 +481,7 @@ static void InitShapeAttributes(layerObj* layer, clusterInfo* base)
   int* itemindexes = layer->iteminfo;
 
   for (i = 0; i < layer->numitems; i++) {
+		fprintf(stderr, "ISA: i=%d numvalues=%d numitems=%d", i, base->shape.numvalues, layer->numitems);
     if (base->shape.numvalues <= i)
       break;
 
@@ -496,7 +497,7 @@ static void InitShapeAttributes(layerObj* layer, clusterInfo* base)
       if (base->group)
         base->shape.values[i] = msStrdup(base->group);
       else
-        base->shape.values[i] = msStrdup("HALELUYA");
+        base->shape.values[i] = msStrdup("");
     } else if (EQUALN(layer->items[i], "Count:", 6)) {
       if (base->shape.values[i])
         msFree(base->shape.values[i]);

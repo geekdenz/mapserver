@@ -137,7 +137,6 @@ extern int yyparse(parseObj *p);
 /* evaluate the filter expression */
 int msClusterEvaluateFilter(expressionObj* expression, shapeObj *shape)
 {
-	fprintf(stderr, "msClusterEvaluateFilter\n");
   if (expression->type == MS_EXPRESSION) {
     int status;
     parseObj p;
@@ -481,7 +480,6 @@ static void InitShapeAttributes(layerObj* layer, clusterInfo* base)
   int* itemindexes = layer->iteminfo;
 
   for (i = 0; i < layer->numitems; i++) {
-		fprintf(stderr, "ISA: i=%d numvalues=%d numitems=%d", i, base->shape.numvalues, layer->numitems);
     if (base->shape.numvalues <= i)
       break;
 
@@ -543,12 +541,20 @@ static void UpdateShapeAttributes(layerObj* layer, clusterInfo* base, clusterInf
         int count = atoi(base->shape.values[i]) + 1;
         msFree(base->shape.values[i]);
         base->shape.values[i] = msIntToString(count);
-      } else if (!EQUAL(base->shape.values[i], current->shape.values[i])
-                 && !EQUAL(base->shape.values[i], "")) {
-        /* clear the value if that doesn't match */
+      }
+      /* clear the value if that doesn't match */
+			/*   NOTE:
+			 * !EQUAL(base->shape.values[i], "")
+			 *   should change to
+			 * EQUAL(base->shape.values[i], "")
+			 *   but becomes a noop!
+			else if (!EQUAL(base->shape.values[i], current->shape.values[i])
+                && !EQUAL(base->shape.values[i], "")) {
+fprintf(stderr, "delete UpdateShapeAttributes: '%s'|'%s'\n", base->shape.values[i], current->shape.values[i]);
         msFree(base->shape.values[i]);
         base->shape.values[i] = msStrdup("");
       }
+			*/
     }
   }
 }
@@ -609,7 +615,6 @@ static void findBestCluster(layerObj* layer, msClusterLayerInfo* layerinfo, clus
       layerinfo->current = s;
       layerinfo->rank = rank;
     }
-		/* fprintf(stderr, "Shape Info: sib=%d col=%d rem=%d index=%d\n", s->numsiblings, s->numcollected, s->numremoved, s->index); */
     s = s->next;
   }
 

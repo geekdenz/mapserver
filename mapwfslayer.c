@@ -29,6 +29,7 @@
 #include "mapserver.h"
 #include "maperror.h"
 #include "mapows.h"
+#include "mapproject.h"
 
 #include <time.h>
 #include <assert.h>
@@ -68,7 +69,7 @@ static wfsParamsObj *msBuildRequestParams(mapObj *map, layerObj *lp,
   rectObj bbox;
   const char *pszTmp;
   int nLength, i = 0;
-  char *pszVersion, *pszTypeName, *pszGeometryName = NULL;
+  char *pszVersion, *pszTypeName;
 
   if (!map || !lp || !bbox_ret)
     return NULL;
@@ -415,12 +416,46 @@ static char *msBuildWFSLayerGetURL(mapObj *map, layerObj *lp, rectObj *bbox,
   /*      mutually exclusive.                                             */
   /* -------------------------------------------------------------------- */
   if (psParams->pszFilter) {
-    snprintf(pszURL + strlen(pszURL), bufferSize-strlen(pszURL), "&FILTER=%s",
-             msEncodeUrl(psParams->pszFilter));
-  } else
-    snprintf(pszURL + strlen(pszURL), bufferSize-strlen(pszURL),
-             "&BBOX=%.15g,%.15g,%.15g,%.15g",
-             bbox->minx, bbox->miny, bbox->maxx, bbox->maxy);
+    char *encoded_filter = msEncodeUrl(psParams->pszFilter);
+    snprintf(pszURL + strlen(pszURL), bufferSize-strlen(pszURL), "&FILTER=%s",encoded_filter);
+    free(encoded_filter);
+  } else {
+	  /*
+	   * take care about the axis order for WFS 1.1
+	   */
+	  char *projUrn;
+	  const char *projEpsg;
+	  projUrn = msOWSGetProjURN(&(lp->projection), &(lp->metadata), "FO", 1);
+	  projEpsg = msOWSGetEPSGProj(&(lp->projection), &(lp->metadata), "FO", 1);
+
+	  /*
+	   * WFS 1.1 supports including the SRS in the BBOX parameter, should
+	   * respect axis order in the BBOX and has a separate SRSNAME parameter for
+	   * the desired result SRS.
+	   * WFS 1.0 is always easting, northing, doesn't include the SRS as part of
+	   * the BBOX parameter and has no SRSNAME parameter: if we don't have a
+	   * URN then fallback to WFS 1.0 style */
+	  if ((strncmp(pszVersion, "1.1", 3) == 0) && projUrn) {
+		 if (projEpsg && (strncmp(projEpsg, "EPSG:", 5) == 0) &&
+				 msIsAxisInverted(atoi(projEpsg + 5))) {
+			 snprintf(pszURL + strlen(pszURL), bufferSize - strlen(pszURL),
+					 "&BBOX=%.15g,%.15g,%.15g,%.15g,%s&SRSNAME=%s",
+					 bbox->miny, bbox->minx, bbox->maxy, bbox->maxx,
+					 projUrn, projUrn);
+		 } else {
+			 snprintf(pszURL + strlen(pszURL), bufferSize - strlen(pszURL),
+					 "&BBOX=%.15g,%.15g,%.15g,%.15g,%s&SRSNAME=%s",
+					 bbox->minx, bbox->miny, bbox->maxy, bbox->maxy,
+					 projUrn, projUrn);
+		 }
+	  } else {
+		  snprintf(pszURL + strlen(pszURL), bufferSize - strlen(pszURL),
+				  "&BBOX=%.15g,%.15g,%.15g,%.15g",
+				  bbox->minx, bbox->miny, bbox->maxx, bbox->maxy);
+	  }
+
+	  msFree(projUrn);
+  }
 
   if (psParams->nMaxFeatures > 0)
     snprintf(pszURL + strlen(pszURL), bufferSize-strlen(pszURL),
@@ -540,18 +575,14 @@ int msPrepareWFSLayerRequest(int nLayerId, mapObj *map, layerObj *lp,
     pszURL = msStrdup(lp->connection);
   }
 
-
   /* ------------------------------------------------------------------
    * check to see if a the metadata wfs_connectiontimeout is set. If it is
    * the case we will use it, else we use the default which is 30 seconds.
    * First check the metadata in the layer object and then in the map object.
    * ------------------------------------------------------------------ */
   nTimeout = 30;  /* Default is 30 seconds  */
-  if ((pszTmp = msOWSLookupMetadata(&(lp->metadata),
+  if ((pszTmp = msOWSLookupMetadata2(&(lp->metadata), &(map->web.metadata),
                                     "FO", "connectiontimeout")) != NULL) {
-    nTimeout = atoi(pszTmp);
-  } else if ((pszTmp = msOWSLookupMetadata(&(map->web.metadata),
-                       "FO", "connectiontimeout")) != NULL) {
     nTimeout = atoi(pszTmp);
   }
 
@@ -561,7 +592,7 @@ int msPrepareWFSLayerRequest(int nLayerId, mapObj *map, layerObj *lp,
    * the connection
    * ------------------------------------------------------------------ */
   if ((pszTmp = msOWSLookupMetadata(&(lp->metadata),
-                                    "MO", "http_cookie")) != NULL) {
+                                    "FO", "http_cookie")) != NULL) {
     if(strcasecmp(pszTmp, "forward") == 0) {
       pszTmp= msLookupHashTable(&(map->web.metadata),"http_cookie_data");
       if(pszTmp != NULL) {
@@ -571,7 +602,7 @@ int msPrepareWFSLayerRequest(int nLayerId, mapObj *map, layerObj *lp,
       pszHTTPCookieData = msStrdup(pszTmp);
     }
   } else if ((pszTmp = msOWSLookupMetadata(&(map->web.metadata),
-                       "MO", "http_cookie")) != NULL) {
+                       "FO", "http_cookie")) != NULL) {
     if(strcasecmp(pszTmp, "forward") == 0) {
       pszTmp= msLookupHashTable(&(map->web.metadata),"http_cookie_data");
       if(pszTmp != NULL) {
@@ -623,6 +654,15 @@ int msPrepareWFSLayerRequest(int nLayerId, mapObj *map, layerObj *lp,
   pasReqInfo[(*numRequests)].bbox = bbox;
   pasReqInfo[(*numRequests)].debug = lp->debug;
 
+  if (msHTTPAuthProxySetup(&(map->web.metadata), &(lp->metadata),
+                           pasReqInfo, *numRequests, map, "FO") != MS_SUCCESS) {
+    if (psParams) {
+      msWFSFreeParamsObj(psParams);
+      free(psParams);
+    }
+    return MS_FAILURE;
+  }
+  
   /* ------------------------------------------------------------------
    * Pre-Open the layer now, (i.e. alloc and fill msWFSLayerInfo inside
    * layer obj).  Layer will be ready for use when the main mapserver
@@ -650,7 +690,7 @@ int msPrepareWFSLayerRequest(int nLayerId, mapObj *map, layerObj *lp,
 
   if (psParams) {
     msWFSFreeParamsObj(psParams);
-    psParams = NULL;
+    free(psParams);
   }
   return nStatus;
 

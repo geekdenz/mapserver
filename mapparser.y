@@ -45,8 +45,9 @@ int yyerror(parseObj *, const char *);
 %left RE EQ NE LT GT LE GE IN IEQ IRE
 %left INTERSECTS DISJOINT TOUCHES OVERLAPS CROSSES WITHIN CONTAINS BEYOND DWITHIN
 %left AREA LENGTH COMMIFY ROUND
+%left UPPER LOWER INITCAP FIRSTCAP
 %left TOSTRING
-%left YYBUFFER DIFFERENCE SIMPLIFY SIMPLIFYPT GENERALIZE
+%left YYBUFFER DIFFERENCE SIMPLIFY SIMPLIFYPT GENERALIZE SMOOTHSIA JAVASCRIPT
 %left '+' '-'
 %left '*' '/' '%'
 %left NEG
@@ -588,6 +589,63 @@ shape_exp: SHAPE
       s->scratch = MS_TRUE;
       $$ = s;
     }
+  | SMOOTHSIA '(' shape_exp ')' {
+      shapeObj *s;
+      s = msSmoothShapeSIA($3, 3, 1, NULL);
+      if(!s) {
+        yyerror(p, "Executing smoothsia failed.");
+        return(-1);
+      }
+      s->scratch = MS_TRUE;
+      $$ = s;
+    }
+  | SMOOTHSIA '(' shape_exp ',' math_exp ')' {
+      shapeObj *s;
+      s = msSmoothShapeSIA($3, $5, 1, NULL);
+      if(!s) {
+        yyerror(p, "Executing smoothsia failed.");
+        return(-1);
+      }
+      s->scratch = MS_TRUE;
+      $$ = s;
+    }
+  | SMOOTHSIA '(' shape_exp ',' math_exp ',' math_exp ')' {
+      shapeObj *s;
+      s = msSmoothShapeSIA($3, $5, $7, NULL);
+      if(!s) {
+        yyerror(p, "Executing smoothsia failed.");
+        return(-1);
+      }
+      s->scratch = MS_TRUE;
+      $$ = s;
+    }
+  | SMOOTHSIA '(' shape_exp ',' math_exp ',' math_exp ',' string_exp ')' {
+      shapeObj *s;
+      s = msSmoothShapeSIA($3, $5, $7, $9);
+      free($9);
+      if(!s) {
+        yyerror(p, "Executing smoothsia failed.");
+        return(-1);
+      }
+      s->scratch = MS_TRUE;
+      $$ = s;
+    }
+  | JAVASCRIPT '(' shape_exp ',' string_exp ')' {
+#ifdef USE_V8_MAPSCRIPT
+      shapeObj *s;
+      s = msV8TransformShape($3, $5);
+      free($5);
+      if(!s) {
+        yyerror(p, "Executing javascript failed.");
+        return(-1);
+      }
+      s->scratch = MS_TRUE;
+      $$ = s;
+#else
+      yyerror(p, "Javascript support not compiled in");
+      return(-1);
+#endif
+    }
 ;
 
 string_exp: STRING
@@ -602,6 +660,22 @@ string_exp: STRING
     }
   | COMMIFY '(' string_exp ')' {  
       $3 = msCommifyString($3); 
+      $$ = $3; 
+    }
+  | UPPER '(' string_exp ')' {  
+      msStringToUpper($3); 
+      $$ = $3; 
+    }
+  | LOWER '(' string_exp ')' {  
+      msStringToLower($3); 
+      $$ = $3; 
+    }
+  | INITCAP '(' string_exp ')' {  
+      msStringInitCap($3); 
+      $$ = $3; 
+    }
+  | FIRSTCAP '(' string_exp ')' {  
+      msStringFirstCap($3); 
       $$ = $3; 
     }
 ;
@@ -686,6 +760,10 @@ int yylex(YYSTYPE *lvalp, parseObj *p)
   case MS_TOKEN_BINDING_MAP_CELLSIZE:
     token = NUMBER;
     (*lvalp).dblval = p->dblval;
+    break;
+  case MS_TOKEN_BINDING_DATA_CELLSIZE:
+    token = NUMBER;
+    (*lvalp).dblval = p->dblval2;
     break;    
   case MS_TOKEN_BINDING_TIME:
     token = TIME;
@@ -700,13 +778,19 @@ int yylex(YYSTYPE *lvalp, parseObj *p)
   case MS_TOKEN_FUNCTION_LENGTH: token = LENGTH; break;
   case MS_TOKEN_FUNCTION_TOSTRING: token = TOSTRING; break;
   case MS_TOKEN_FUNCTION_COMMIFY: token = COMMIFY; break;
+  case MS_TOKEN_FUNCTION_UPPER: token = UPPER; break;
+  case MS_TOKEN_FUNCTION_LOWER: token = LOWER; break;
+  case MS_TOKEN_FUNCTION_INITCAP: token = INITCAP; break;
+  case MS_TOKEN_FUNCTION_FIRSTCAP: token = FIRSTCAP; break;
   case MS_TOKEN_FUNCTION_ROUND: token = ROUND; break;
 
   case MS_TOKEN_FUNCTION_BUFFER: token = YYBUFFER; break;
   case MS_TOKEN_FUNCTION_DIFFERENCE: token = DIFFERENCE; break;
   case MS_TOKEN_FUNCTION_SIMPLIFY: token = SIMPLIFY; break;
   case MS_TOKEN_FUNCTION_SIMPLIFYPT: token = SIMPLIFYPT; break;
-  case MS_TOKEN_FUNCTION_GENERALIZE: token = GENERALIZE; break;        
+  case MS_TOKEN_FUNCTION_GENERALIZE: token = GENERALIZE; break;
+  case MS_TOKEN_FUNCTION_SMOOTHSIA: token = SMOOTHSIA; break;
+  case MS_TOKEN_FUNCTION_JAVASCRIPT: token = JAVASCRIPT; break;        
 
   default:
     break;
@@ -717,6 +801,6 @@ int yylex(YYSTYPE *lvalp, parseObj *p)
 }
 
 int yyerror(parseObj *p, const char *s) {
-  msSetError(MS_PARSEERR, s, "yyparse()");
+  msSetError(MS_PARSEERR, "%s", "yyparse()", s);
   return(0);
 }

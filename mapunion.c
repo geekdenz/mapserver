@@ -36,11 +36,11 @@
 
 
 #define MSUNION_NUMITEMS        3
-#define MSUNION_SOURCELAYERNAME        "Union:SourceLayerName"
+#define MSUNION_SOURCELAYERNAME        "Union_SourceLayerName"
 #define MSUNION_SOURCELAYERNAMEINDEX   -100
-#define MSUNION_SOURCELAYERGROUP        "Union:SourceLayerGroup"
+#define MSUNION_SOURCELAYERGROUP        "Union_SourceLayerGroup"
 #define MSUNION_SOURCELAYERGROUPINDEX   -101
-#define MSUNION_SOURCELAYERVISIBLE        "Union:SourceLayerVisible"
+#define MSUNION_SOURCELAYERVISIBLE        "Union_SourceLayerVisible"
 #define MSUNION_SOURCELAYERVISIBLEINDEX   -102
 
 typedef struct {
@@ -497,11 +497,13 @@ int msUnionLayerNextShape(layerObj *layer, shapeObj *shape)
           }
           /* set up annotation */
           msFree(layerinfo->classText);
+          layerinfo->classText = NULL;
           if(srclayer->class[layerinfo->classIndex]->numlabels > 0) {
-            msShapeGetAnnotation(srclayer, shape);
-            layerinfo->classText = msStrdup(srclayer->class[layerinfo->classIndex]->labels[0]->annotext); /* pull text from the first label only */
-          } else
-            layerinfo->classText = NULL;
+            /* pull text from the first label only */
+            if(msGetLabelStatus(layer->map,layer,shape,srclayer->class[layerinfo->classIndex]->labels[0]) == MS_ON) {
+              layerinfo->classText = msShapeGetLabelAnnotation(layer,shape,srclayer->class[layerinfo->classIndex]->labels[0]);
+            }
+          }
         }
 
 #ifdef USE_PROJ
@@ -696,7 +698,6 @@ static int msUnionLayerGetAutoStyle(mapObj *map, layerObj *layer, classObj *c, s
     }
     c->numlabels = src->numlabels;
 
-    c->type = src->type;
     c->layer = layer;
     c->text.string = layerinfo->classText;
     layerinfo->classText = NULL;

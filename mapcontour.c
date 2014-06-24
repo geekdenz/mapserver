@@ -4,6 +4,7 @@
  * Project:  MapServer
  * Purpose:  Contour Layer
  * Author:   Alan Boudreault (aboudreault@mapgears.com)
+ * Author:   Daniel Morissette (dmorissette@mapgears.com)
  *
  **********************************************************************
  * Copyright (c) 2011, Alan Boudreault, MapGears
@@ -55,6 +56,7 @@ typedef struct {
   double *buffer; /* memory dataset buffer */
   rectObj extent; /* original dataset extent */
   OGRDataSourceH hOGRDS;
+  double cellsize;
 
 } contourLayerInfo;
 
@@ -101,14 +103,13 @@ static void msContourLayerInfoInitialize(layerObj *layer)
   clinfo->extent.maxx = -1.0;
   clinfo->extent.maxy = -1.0;
   
-  
   initLayer(&clinfo->ogrLayer, layer->map);
   clinfo->ogrLayer.type = layer->type;
   clinfo->ogrLayer.debug = layer->debug;
   clinfo->ogrLayer.connectiontype = MS_OGR;
   clinfo->ogrLayer.name = msStrdup(layer->name);
-  clinfo->ogrLayer.connection = (char*)msSmallMalloc(strlen(layer->name)+13);
-  sprintf(clinfo->ogrLayer.connection, "__%s_CONTOUR__", layer->name);
+  clinfo->ogrLayer.connection = (char*)msSmallMalloc(strlen(clinfo->ogrLayer.name)+13);
+  sprintf(clinfo->ogrLayer.connection, "__%s_CONTOUR__", clinfo->ogrLayer.name);
   clinfo->ogrLayer.units = layer->units;
 }
 
@@ -149,8 +150,7 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
   if (clinfo == NULL || clinfo->hOrigDS == NULL) {
     msSetError(MS_MISCERR, "Assertion failed: Contour layer not opened!!!",
                "msContourLayerReadRaster()");
-    return MS_FAILURE;
-    
+    return MS_FAILURE;    
   }
 
   bands = CSLTokenizeStringComplex(
@@ -233,7 +233,6 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
 
     mapRect = rect;
     map_cellsize_x = map_cellsize_y = map->cellsize;      
-
 #ifdef USE_PROJ
     /* if necessary, project the searchrect to source coords */
     if (msProjectionsDiffer( &(map->projection), &(layer->projection)))  {
@@ -316,7 +315,6 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
       copyRect.minx = GEO_TRANS(adfGeoTransform,0,src_ysize);
     if (copyRect.maxx > GEO_TRANS(adfGeoTransform,src_xsize,0))
       copyRect.maxx = GEO_TRANS(adfGeoTransform,src_xsize,0);
-    
     if (copyRect.miny < GEO_TRANS(adfGeoTransform+3,0,src_ysize))
       copyRect.miny = GEO_TRANS(adfGeoTransform+3,0,src_ysize);
     if (copyRect.maxy > GEO_TRANS(adfGeoTransform+3,src_xsize,0))
@@ -324,8 +322,8 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
     
     if (copyRect.minx >= copyRect.maxx || copyRect.miny >= copyRect.maxy) {
       if (layer->debug)
-        msDebug("msContourLayerReadRaster(): Error in overlap calculation.\n");
-      return MS_FAILURE;
+        msDebug("msContourLayerReadRaster(): No overlap.\n");
+      return MS_SUCCESS;
     }
 
     /*
@@ -367,7 +365,7 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
     {
       if (layer->debug)
         msDebug("msContourLayerReadRaster(): input window too small, or no apparent overlap between map view and this window(1).\n");
-      return MS_FAILURE;
+      return MS_SUCCESS;
     }
 
     /* Target buffer size */
@@ -377,7 +375,7 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
     if (dst_xsize == 0 || dst_ysize == 0) {
       if (layer->debug)
         msDebug("msContourLayerReadRaster(): no apparent overlap between map view and this window(2).\n");
-      return MS_FAILURE;
+      return MS_SUCCESS;
     }
 
     if (layer->debug)
@@ -389,6 +387,10 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
     src_yoff = 0;
     dst_xsize = src_xsize = MIN(map->width,src_xsize);
     dst_ysize = src_ysize = MIN(map->height,src_ysize);
+    copyRect.minx = copyRect.miny = 0;
+    copyRect.maxx = map->width;
+    copyRect.maxy = map->height;
+    dst_cellsize_y = dst_cellsize_x = 1;
   }
 
   /* -------------------------------------------------------------------- */
@@ -417,7 +419,7 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
   CPLPrintPointer(pointer, clinfo->buffer, sizeof(pointer));
   sprintf(memDSPointer,"MEM:::DATAPOINTER=%s,PIXELS=%d,LINES=%d,BANDS=1,DATATYPE=Float64",
           pointer, dst_xsize, dst_ysize);
-  clinfo->hDS = GDALOpen(memDSPointer, GF_Read);
+  clinfo->hDS = GDALOpen(memDSPointer,  GA_ReadOnly);
   if (clinfo->hDS == NULL) {
     msSetError(MS_IMGERR,
                "Unable to open GDAL Memory dataset.",
@@ -433,6 +435,13 @@ static int msContourLayerReadRaster(layerObj *layer, rectObj rect)
   adfGeoTransform[4] = 0;
   adfGeoTransform[5] = -dst_cellsize_y;
 
+  clinfo->cellsize = MAX(dst_cellsize_x, dst_cellsize_y);
+  {
+    char buf[64];
+    sprintf(buf, "%lf", clinfo->cellsize);
+    msInsertHashTable(&layer->metadata, "__data_cellsize__", buf);
+  }
+      
   GDALSetGeoTransform(clinfo->hDS, adfGeoTransform);
   return MS_SUCCESS;
 }
@@ -457,6 +466,9 @@ static char* msContourGetOption(layerObj *layer, const char *name)
   
   options = CSLFetchNameValueMultiple(layer->processing, name);
   c = CSLCount(options);
+
+  /* First pass to find the value among options that have min/maxscaledenom */
+  /* specified */
   for (i=0; i<c && found == MS_FALSE; ++i) {
     values = CSLTokenizeStringComplex(options[i], ":", FALSE, FALSE);
     if (CSLCount(values) == 2) {
@@ -472,6 +484,17 @@ static char* msContourGetOption(layerObj *layer, const char *name)
         }
       }
       CSLDestroy(tmp);
+    }
+    CSLDestroy(values);
+  }
+  
+  /* Second pass to find the value among options that do NOT have */
+  /* min/maxscaledenom specified */
+  for (i=0; i<c && found == MS_FALSE; ++i) {
+    values = CSLTokenizeStringComplex(options[i], ":", FALSE, FALSE);
+    if (CSLCount(values) == 1) {
+      value = msStrdup(values[0]);
+      found = MS_TRUE;
     }
     CSLDestroy(values);
   }
@@ -503,6 +526,10 @@ static int msContourLayerGenerateContour(layerObj *layer)
     return MS_FAILURE;
   }
 
+  if (!clinfo->hDS) { /* no overlap */
+    return MS_SUCCESS;
+  }
+  
   hBand = GDALGetRasterBand(clinfo->hDS, 1);
   if (hBand == NULL)
   {
@@ -579,6 +606,12 @@ static int msContourLayerGenerateContour(layerObj *layer)
                                                     elevItem ),
                               NULL, NULL );
 
+  if (eErr != CE_None) {
+    msSetError( MS_IOERR, "GDALContourGenerate() failed: %s",
+                "msContourLayerGenerateContour()", CPLGetLastErrorMsg() );
+    return MS_FAILURE;
+  }
+  
   msConnPoolRegister(&clinfo->ogrLayer, clinfo->hOGRDS, msContourOGRCloseConnection);
 
   return MS_SUCCESS;
@@ -630,12 +663,14 @@ int msContourLayerOpen(layerObj *layer)
   if (msContourLayerGenerateContour(layer) != MS_SUCCESS)
     return MS_FAILURE;
 
-  GDALClose(clinfo->hDS);
-  clinfo->hDS = NULL;  
-  free(clinfo->buffer);
+  if (clinfo->hDS) {
+    GDALClose(clinfo->hDS);
+    clinfo->hDS = NULL;  
+    free(clinfo->buffer);
+  }
 
   /* Open our virtual ogr layer */
-  if (msLayerOpen(&clinfo->ogrLayer) != MS_SUCCESS)
+  if (clinfo->hOGRDS && (msLayerOpen(&clinfo->ogrLayer) != MS_SUCCESS))
     return MS_FAILURE;
   
   return MS_SUCCESS;
@@ -656,7 +691,8 @@ int msContourLayerClose(layerObj *layer)
     msDebug("Entering msContourLayerClose().\n");
 
   if (clinfo) {
-    msConnPoolRelease(&clinfo->ogrLayer, clinfo->hOGRDS);
+    if (clinfo->hOGRDS)
+      msConnPoolRelease(&clinfo->ogrLayer, clinfo->hOGRDS);
 
     msLayerClose(&clinfo->ogrLayer);
     
@@ -672,15 +708,16 @@ int msContourLayerClose(layerObj *layer)
     }
 
     msContourLayerInfoFree(layer);
-  }
 
+  }
+  
   return MS_SUCCESS;
 }
 
 int msContourLayerGetItems(layerObj *layer)
 {
   contourLayerInfo *clinfo = (contourLayerInfo *) layer->layerinfo;
-  
+
   if (clinfo == NULL) {
     msSetError(MS_MISCERR, "Assertion failed: Contour layer not opened!!!",
                "msContourLayerGetItems()");
@@ -692,6 +729,7 @@ int msContourLayerGetItems(layerObj *layer)
 
 int msContourLayerWhichShapes(layerObj *layer, rectObj rect, int isQuery)
 {
+  int i;
   rectObj newRect;
   contourLayerInfo *clinfo = (contourLayerInfo *) layer->layerinfo;
 
@@ -718,7 +756,9 @@ int msContourLayerWhichShapes(layerObj *layer, rectObj rect, int isQuery)
 #endif
 
   /* regenerate the raster io */
-  msConnPoolRelease(&clinfo->ogrLayer, clinfo->hOGRDS);
+  if (clinfo->hOGRDS)
+    msConnPoolRelease(&clinfo->ogrLayer, clinfo->hOGRDS);
+  
   msLayerClose(&clinfo->ogrLayer);
   
   /* Open the raster source */
@@ -729,16 +769,24 @@ int msContourLayerWhichShapes(layerObj *layer, rectObj rect, int isQuery)
   if (msContourLayerGenerateContour(layer) != MS_SUCCESS)
     return MS_FAILURE;
 
-  GDALClose(clinfo->hDS);
-  clinfo->hDS = NULL;
-  free(clinfo->buffer);  
+  if (clinfo->hDS) {
+    GDALClose(clinfo->hDS);
+    clinfo->hDS = NULL;
+    free(clinfo->buffer);
+  }
+  
+  if (!clinfo->hOGRDS) /* no overlap */
+    return MS_DONE;
   
   /* Open our virtual ogr layer */
   if (msLayerOpen(&clinfo->ogrLayer) != MS_SUCCESS)
     return MS_FAILURE;
 
   clinfo->ogrLayer.numitems = layer->numitems;
-  clinfo->ogrLayer.items = CSLDuplicate(layer->items); 
+  clinfo->ogrLayer.items = (char **) msSmallMalloc(sizeof(char *)*layer->numitems);
+  for (i=0; i<layer->numitems;++i) {
+    clinfo->ogrLayer.items[i] = msStrdup(layer->items[i]);
+  }
 
   return msLayerWhichShapes(&clinfo->ogrLayer, rect, isQuery);
 }

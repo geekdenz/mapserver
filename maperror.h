@@ -46,7 +46,6 @@ extern "C" {
 #define MS_REGEXERR 5
 #define MS_TTFERR 6
 #define MS_DBFERR 7
-#define MS_GDERR 8
 #define MS_IDENTERR 9
 #define MS_EOFERR 10
 #define MS_PROJERR 11
@@ -79,8 +78,9 @@ extern "C" {
 #define MS_NULLPARENTERR 38
 #define MS_AGGERR 39
 #define MS_OWSERR 40
-#define MS_OGLERR 42
-#define MS_RENDERERERR 43
+#define MS_OGLERR 41
+#define MS_RENDERERERR 42
+#define MS_V8ERR 43  
 #define MS_NUMERRORCODES 44
 
 #define MESSAGELENGTH 2048
@@ -92,6 +92,14 @@ extern "C" {
 #  define MS_DLL_EXPORT     __declspec(dllexport)
 #else
 #define  MS_DLL_EXPORT
+#endif
+
+#ifndef MS_PRINT_FUNC_FORMAT
+#if defined(__GNUC__) && __GNUC__ >= 3 && !defined(DOXYGEN_SKIP)
+#define MS_PRINT_FUNC_FORMAT( format_idx, arg_idx )  __attribute__((__format__ (__printf__, format_idx, arg_idx)))
+#else
+#define MS_PRINT_FUNC_FORMAT( format_idx, arg_idx )
+#endif
 #endif
 
   typedef struct errorObj {
@@ -114,7 +122,7 @@ extern "C" {
   MS_DLL_EXPORT char *msGetErrorString(char *delimiter);
 
 #ifndef SWIG
-  MS_DLL_EXPORT void msSetError(int code, const char *message, const char *routine, ...);
+  MS_DLL_EXPORT void msSetError(int code, const char *message, const char *routine, ...) MS_PRINT_FUNC_FORMAT(2,4) ;
   MS_DLL_EXPORT void msWriteError(FILE *stream);
   MS_DLL_EXPORT void msWriteErrorXML(FILE *stream);
   MS_DLL_EXPORT char *msGetErrorCodeString(int code);
@@ -134,7 +142,8 @@ extern "C" {
                  MS_DEBUGLEVEL_TUNING     = 2,  /* Reports timing info */
                  MS_DEBUGLEVEL_V          = 3,  /* Verbose */
                  MS_DEBUGLEVEL_VV         = 4,  /* Very verbose */
-                 MS_DEBUGLEVEL_VVV        = 5   /* Very very verbose */
+                 MS_DEBUGLEVEL_VVV        = 5,  /* Very very verbose */
+                 MS_DEBUGLEVEL_DEVDEBUG   = 20, /* Undocumented, will trigger debug messages only useful for developers */
                } debugLevel;
 
 #ifndef SWIG
@@ -157,7 +166,7 @@ extern "C" {
   } debugInfoObj;
 
 
-  MS_DLL_EXPORT void msDebug( const char * pszFormat, ... );
+  MS_DLL_EXPORT void msDebug( const char * pszFormat, ... ) MS_PRINT_FUNC_FORMAT(1,2) ;
   MS_DLL_EXPORT int msSetErrorFile(const char *pszErrorFile, const char *pszRelToPath);
   MS_DLL_EXPORT void msCloseErrorFile( void );
   MS_DLL_EXPORT const char *msGetErrorFile( void );

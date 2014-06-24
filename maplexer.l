@@ -182,12 +182,18 @@ char path[MS_MAXPATHLEN];
 <EXPRESSION_STRING>tostring                    { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_TOSTRING); }
 <EXPRESSION_STRING>commify                     { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_COMMIFY); }
 <EXPRESSION_STRING>round                       { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_ROUND); }
+<EXPRESSION_STRING>upper                       { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_UPPER); }
+<EXPRESSION_STRING>lower                       { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_LOWER); }
+<EXPRESSION_STRING>initcap                     { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_INITCAP); }
+<EXPRESSION_STRING>firstcap                     { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_FIRSTCAP); }
 
 <EXPRESSION_STRING>buffer                      { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_BUFFER); }
 <EXPRESSION_STRING>difference                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_DIFFERENCE); }
 <EXPRESSION_STRING>simplify                    { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_SIMPLIFY); }
 <EXPRESSION_STRING>simplifypt                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_SIMPLIFYPT); }
 <EXPRESSION_STRING>generalize                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_GENERALIZE); }
+<EXPRESSION_STRING>smoothsia                   { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_SMOOTHSIA); }
+<EXPRESSION_STRING>javascript                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_FUNCTION_JAVASCRIPT); }
 
 <EXPRESSION_STRING>intersects                  { MS_LEXER_RETURN_TOKEN(MS_TOKEN_COMPARISON_INTERSECTS); }
 <EXPRESSION_STRING>disjoint                    { MS_LEXER_RETURN_TOKEN(MS_TOKEN_COMPARISON_DISJOINT); }
@@ -374,6 +380,7 @@ char path[MS_MAXPATHLEN];
 <INITIAL,URL_STRING>text                       { MS_LEXER_RETURN_TOKEN(TEXT); }
 <INITIAL,URL_STRING>tileindex                  { MS_LEXER_RETURN_TOKEN(TILEINDEX); }
 <INITIAL,URL_STRING>tileitem                   { MS_LEXER_RETURN_TOKEN(TILEITEM); }
+<INITIAL,URL_STRING>tilesrs                    { MS_LEXER_RETURN_TOKEN(TILESRS); }
 <INITIAL,URL_STRING>title                      { MS_LEXER_RETURN_TOKEN(TITLE); }
 <INITIAL>to                                    { MS_LEXER_RETURN_TOKEN(TO); }
 <INITIAL,URL_STRING>tolerance                  { MS_LEXER_RETURN_TOKEN(TOLERANCE); }
@@ -383,6 +390,8 @@ char path[MS_MAXPATHLEN];
 <INITIAL>transform                             { MS_LEXER_RETURN_TOKEN(TRANSFORM); }
 <INITIAL>type                                  { MS_LEXER_RETURN_TOKEN(TYPE); }
 <INITIAL,URL_VARIABLE,URL_STRING>units         { MS_LEXER_RETURN_TOKEN(UNITS); }
+<INITIAL>utfdata                               { MS_LEXER_RETURN_TOKEN(UTFDATA); }
+<INITIAL>utfitem                               { MS_LEXER_RETURN_TOKEN(UTFITEM); }
 <INITIAL>validation                            { MS_LEXER_RETURN_TOKEN(VALIDATION); }
 <INITIAL>values                                { MS_LEXER_RETURN_TOKEN(VALUES); }
 <INITIAL,URL_VARIABLE>web                      { MS_LEXER_RETURN_TOKEN(WEB); }
@@ -414,6 +423,7 @@ char path[MS_MAXPATHLEN];
 <INITIAL,URL_STRING>follow                     { MS_LEXER_RETURN_TOKEN(MS_FOLLOW); }
 <INITIAL>giant                                 { MS_LEXER_RETURN_TOKEN(MS_GIANT); }
 <INITIAL>hatch                                 { MS_LEXER_RETURN_TOKEN(MS_SYMBOL_HATCH); }
+<INITIAL>kerneldensity                         { MS_LEXER_RETURN_TOKEN(MS_KERNELDENSITY); }
 <INITIAL>hilite                                { MS_LEXER_RETURN_TOKEN(MS_HILITE); }
 <INITIAL,URL_STRING>inches                     { MS_LEXER_RETURN_TOKEN(MS_INCHES); }
 <INITIAL,URL_STRING>kilometers                 { MS_LEXER_RETURN_TOKEN(MS_KILOMETERS); }
@@ -469,7 +479,6 @@ char path[MS_MAXPATHLEN];
 <INITIAL>vector                                { MS_LEXER_RETURN_TOKEN(MS_SYMBOL_VECTOR); }
 <INITIAL>wfs                                   { MS_LEXER_RETURN_TOKEN(MS_WFS); }
 <INITIAL>wms                                   { MS_LEXER_RETURN_TOKEN(MS_WMS); }
-<INITIAL>alpha                                 { MS_LEXER_RETURN_TOKEN(MS_GD_ALPHA); }
 
 <URL_VARIABLE>\[[a-z/\.][a-z0-9/\.\-\=_ ]*\]   {
                                                  msyytext++;
@@ -503,8 +512,12 @@ char path[MS_MAXPATHLEN];
   return(MS_TOKEN_BINDING_SHAPE);
 }
 <EXPRESSION_STRING>\[map_cellsize\] { 
-  /* attribute binding - cellsize */
+  /* attribute binding - map cellsize */
   return(MS_TOKEN_BINDING_MAP_CELLSIZE);
+}
+<EXPRESSION_STRING>\[data_cellsize\] { 
+  /* attribute binding - data cellsize */
+  return(MS_TOKEN_BINDING_DATA_CELLSIZE);
 }
 <EXPRESSION_STRING>\[[^\]]*\] {
   /* attribute binding - numeric (no quotes) */
@@ -670,6 +683,7 @@ char path[MS_MAXPATHLEN];
                                                  msyyin = fopen(msBuildPath(path, msyybasepath, msyytext), "r");
                                                  if(!msyyin) {
                                                    msSetError(MS_IOERR, "Error opening included file \"%s\".", "msyylex()", msyytext);
+                                                   msyyin = YY_CURRENT_BUFFER->yy_input_file;
                                                    return(-1);
                                                  }
 
@@ -730,6 +744,6 @@ int msyywrap() /* override */
 }
 
 int msyyerror(char *s) {
-  msSetError(MS_PARSEERR, s, "msyyparse()");
+  msSetError(MS_PARSEERR, "%s", "msyyparse()", s);
   return(0);
 }

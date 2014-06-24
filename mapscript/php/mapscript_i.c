@@ -141,7 +141,7 @@ imageObj *mapObj_drawQuery(mapObj* self)
 
 imageObj *mapObj_drawLegend(mapObj* self)
 {
-  return msDrawLegend(self, MS_FALSE);
+  return msDrawLegend(self, MS_FALSE, NULL);
 }
 
 
@@ -169,12 +169,13 @@ int mapObj_embedLegend(mapObj* self, imageObj *img)
 
 int mapObj_drawLabelCache(mapObj* self, imageObj *img)
 {
-  return msDrawLabelCache(img, self);
+  return msDrawLabelCache(self, img);
 }
 
 labelCacheMemberObj* mapObj_getLabel(mapObj* self, int i)
 {
-  return msGetLabelCacheMember(&(self->labelcache), i);
+  msSetError(MS_MISCERR, "LabelCacheMember access is not available", "getLabel()");
+  return NULL;
 }
 
 int mapObj_queryByPoint(mapObj* self, pointObj *point, int mode, double buffer)
@@ -1035,7 +1036,6 @@ classObj *classObj_new(layerObj *layer, classObj *class)
     layer->class[layer->numclasses]->layer = layer;
   }
 
-  layer->class[layer->numclasses]->type = layer->type;
   layer->class[layer->numclasses]->layer = layer;
 
   layer->numclasses++;
@@ -1108,7 +1108,7 @@ int classObj_drawLegendIcon(classObj *self, mapObj *map, layerObj *layer, int wi
 #ifdef USE_GD
   msClearLayerPenValues(layer); // just in case the mapfile has already been processed
 #endif
-  return msDrawLegendIcon(map, layer, self, width, height, dstImg, dstX, dstY, MS_TRUE);
+  return msDrawLegendIcon(map, layer, self, width, height, dstImg, dstX, dstY, MS_TRUE, NULL);
 }
 
 imageObj *classObj_createLegendIcon(classObj *self, mapObj *map, layerObj *layer, int width, int height)
@@ -1143,8 +1143,6 @@ classObj *classObj_clone(classObj *class, layerObj *layer)
 
   initClass(dstClass);
   msCopyClass(dstClass, class, layer);
-
-  dstClass->type = layer->type;
 
   return dstClass;
 }
@@ -1554,7 +1552,6 @@ int rectObj_draw(rectObj *self, mapObj *map, layerObj *layer,
 
   if(text && layer->class[classindex]->numlabels > 0) {
     shape.text = strdup(text);
-    msShapeGetAnnotation(layer,&shape);
   }
   
   msDrawShape(map, layer, &shape, img, -1, MS_DRAWMODE_FEATURES|MS_DRAWMODE_LABELS);

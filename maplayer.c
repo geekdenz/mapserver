@@ -70,40 +70,47 @@ void msLayerFreeItemInfo(layerObj *layer)
 
 int msLayerRestoreFromScaletokens(layerObj *layer)
 {
-  if(!layer->scaletokens) {
+  if(!layer->scaletokens || !layer->orig_st) {
     return MS_SUCCESS;
   }
-  if(layer->orig_data) {
+  if(layer->orig_st->data) {
     msFree(layer->data);
-    layer->data = layer->orig_data;
-    layer->orig_data = NULL;
+    layer->data = layer->orig_st->data;
   }
-  if(layer->orig_tileindex) {
+  if(layer->orig_st->tileindex) {
     msFree(layer->tileindex);
-    layer->tileindex = layer->orig_tileindex;
-    layer->orig_tileindex = NULL;
+    layer->tileindex = layer->orig_st->tileindex;
   }
-  if(layer->orig_tileitem) {
+  if(layer->orig_st->tileitem) {
     msFree(layer->tileitem);
-    layer->tileitem = layer->orig_tileitem;
-    layer->orig_tileitem = NULL;
+    layer->tileitem = layer->orig_st->tileitem;
   }
-  if(layer->orig_filter) {
-    msLoadExpressionString(&(layer->filter),layer->orig_filter);
-    msFree(layer->orig_filter);
-    layer->orig_filter = NULL;
+  if(layer->orig_st->filter) {
+    msLoadExpressionString(&(layer->filter),layer->orig_st->filter);
+    msFree(layer->orig_st->filter);
   }
-  if(layer->orig_filteritem) {
+  if(layer->orig_st->filteritem) {
     msFree(layer->filteritem);
-    layer->filteritem = layer->orig_filteritem;
-    layer->orig_filteritem = NULL;
+    layer->filteritem = layer->orig_st->filteritem;
   }
+  if(layer->orig_st->n_processing) {
+    int i;
+    for(i=0;i<layer->orig_st->n_processing;i++) {
+      msFree(layer->processing[layer->orig_st->processing_idx[i]]);
+      layer->processing[layer->orig_st->processing_idx[i]] = layer->orig_st->processing[i];
+    }
+    msFree(layer->orig_st->processing);
+    msFree(layer->orig_st->processing_idx);
+  }
+  msFree(layer->orig_st);
+  layer->orig_st = NULL;
   return MS_SUCCESS; 
 }
 
+#define check_st_alloc(l) if(!l->orig_st) l->orig_st=msSmallCalloc(1,sizeof(originalScaleTokenStrings));
 int msLayerApplyScaletokens(layerObj *layer, double scale)
 {
-  int i;
+  int i,p;
   if(!layer->scaletokens) {
     return MS_SUCCESS;
   }
@@ -129,7 +136,8 @@ int msLayerApplyScaletokens(layerObj *layer, double scale)
         msDebug("replacing scaletoken (%s) with (%s) in layer->data (%s) for scale=%f\n",
                 st->name,ste->value,layer->name,scale);
       }
-      layer->orig_data = layer->data;
+      check_st_alloc(layer);
+      layer->orig_st->data = layer->data;
       layer->data = msStrdup(layer->data);
       layer->data = msReplaceSubstring(layer->data,st->name,ste->value);
     }
@@ -138,7 +146,8 @@ int msLayerApplyScaletokens(layerObj *layer, double scale)
         msDebug("replacing scaletoken (%s) with (%s) in layer->tileindex (%s) for scale=%f\n",
                 st->name,ste->value,layer->name,scale);
       }
-      layer->orig_tileindex = layer->tileindex;
+      check_st_alloc(layer);
+      layer->orig_st->tileindex = layer->tileindex;
       layer->tileindex = msStrdup(layer->tileindex);
       layer->tileindex = msReplaceSubstring(layer->tileindex,st->name,ste->value);
     }
@@ -147,7 +156,8 @@ int msLayerApplyScaletokens(layerObj *layer, double scale)
         msDebug("replacing scaletoken (%s) with (%s) in layer->tileitem (%s) for scale=%f\n",
                 st->name,ste->value,layer->name,scale);
       }
-      layer->orig_tileitem = layer->tileitem;
+      check_st_alloc(layer);
+      layer->orig_st->tileitem = layer->tileitem;
       layer->tileitem = msStrdup(layer->tileitem);
       layer->tileitem = msReplaceSubstring(layer->tileitem,st->name,ste->value);
     }
@@ -156,7 +166,8 @@ int msLayerApplyScaletokens(layerObj *layer, double scale)
         msDebug("replacing scaletoken (%s) with (%s) in layer->filteritem (%s) for scale=%f\n",
                 st->name,ste->value,layer->name,scale);
       }
-      layer->orig_filteritem = layer->filteritem;
+      check_st_alloc(layer);
+      layer->orig_st->filteritem = layer->filteritem;
       layer->filteritem = msStrdup(layer->filteritem);
       layer->filteritem = msReplaceSubstring(layer->filteritem,st->name,ste->value);
     }
@@ -166,12 +177,26 @@ int msLayerApplyScaletokens(layerObj *layer, double scale)
         msDebug("replacing scaletoken (%s) with (%s) in layer->filter (%s) for scale=%f\n",
                 st->name,ste->value,layer->name,scale);
       }
-      layer->orig_filter = msStrdup(layer->filter.string);
+      check_st_alloc(layer);
+      layer->orig_st->filter = msStrdup(layer->filter.string);
       tmpval = msStrdup(layer->filter.string);
       tmpval = msReplaceSubstring(tmpval,st->name,ste->value);
       if(msLoadExpressionString(&(layer->filter),tmpval) == -1) return(MS_FAILURE); /* loadExpression() cleans up previously allocated expression */
       msFree(tmpval);
     }
+    for(p=0;p<layer->numprocessing;p++) {
+      if(strstr(layer->processing[p],st->name)) {
+        check_st_alloc(layer);
+        layer->orig_st->n_processing++;
+        layer->orig_st->processing = msSmallRealloc(layer->orig_st->processing, layer->orig_st->n_processing * sizeof(char*));
+        layer->orig_st->processing_idx = msSmallRealloc(layer->orig_st->processing_idx, layer->orig_st->n_processing * sizeof(int));
+        layer->orig_st->processing[layer->orig_st->n_processing-1] = layer->processing[p];
+        layer->orig_st->processing_idx[layer->orig_st->n_processing-1] = p;
+        layer->processing[p] = msStrdup(layer->processing[p]);
+        layer->processing[p] = msReplaceSubstring(layer->processing[p],st->name,ste->value);
+      }
+    }
+
   }
   return MS_SUCCESS;
 }
@@ -271,6 +296,14 @@ int msLayerNextShape(layerObj *layer, shapeObj *shape)
       return rv;
   }
 
+#ifdef USE_V8_MAPSCRIPT
+  /* we need to force the GetItems for the geomtransform attributes */
+  if(!layer->items &&
+     layer->_geomtransform.type == MS_GEOMTRANSFORM_EXPRESSION &&
+     strstr(layer->_geomtransform.string, "javascript"))
+      msLayerGetItems(layer);
+#endif
+
   /* At the end of switch case (default -> break; -> return MS_FAILURE),
    * was following TODO ITEM:
    */
@@ -279,10 +312,20 @@ int msLayerNextShape(layerObj *layer, shapeObj *shape)
   /* We need to leverage the iteminfo (I think) at this point */
 
   rv = layer->vtable->LayerNextShape(layer, shape);
+  if(rv != MS_SUCCESS)
+    return rv;
 
   /* RFC89 Apply Layer GeomTransform */
   if(layer->_geomtransform.type != MS_GEOMTRANSFORM_NONE && rv == MS_SUCCESS) {
     rv = msGeomTransformShape(layer->map, layer, shape);      
+    if(rv != MS_SUCCESS)
+      return rv;
+  }
+
+  if(layer->encoding) {
+    rv = msLayerEncodeShapeAttributes(layer,shape);
+    if(rv != MS_SUCCESS)
+      return rv;
   }
   
   return rv;
@@ -323,10 +366,20 @@ int msLayerGetShape(layerObj *layer, shapeObj *shape, resultObj *record)
   */
 
   rv = layer->vtable->LayerGetShape(layer, shape, record);
+  if(rv != MS_SUCCESS)
+    return rv;
   
   /* RFC89 Apply Layer GeomTransform */
   if(layer->_geomtransform.type != MS_GEOMTRANSFORM_NONE && rv == MS_SUCCESS) {
     rv = msGeomTransformShape(layer->map, layer, shape); 
+    if(rv != MS_SUCCESS)
+      return rv;
+  }
+
+  if(layer->encoding) {
+    rv = msLayerEncodeShapeAttributes(layer,shape);
+    if(rv != MS_SUCCESS)
+      return rv;
   }
 
   return rv;
@@ -519,6 +572,7 @@ int msTokenizeExpression(expressionObj *expression, char **list, int *listsize)
         msTimeInit(&(node->tokenval.tmval));
         if(msParseTime(msyystring_buffer, &(node->tokenval.tmval)) != MS_TRUE) {
           msSetError(MS_PARSEERR, "Parsing time value failed.", "msTokenizeExpression()");
+          free(node);
           goto parse_error;
         }
         break;
@@ -535,15 +589,20 @@ int msTokenizeExpression(expressionObj *expression, char **list, int *listsize)
         break;
       case MS_TOKEN_BINDING_MAP_CELLSIZE:
         node->token = token;
+        break;
+      case MS_TOKEN_BINDING_DATA_CELLSIZE:
+        node->token = token;
         break;        
       case MS_TOKEN_FUNCTION_FROMTEXT: /* we want to process a shape from WKT once and not for every feature being evaluated */
         if((token = msyylex()) != 40) { /* ( */
           msSetError(MS_PARSEERR, "Parsing fromText function failed.", "msTokenizeExpression()");
+          free(node);
           goto parse_error;
         }
 
         if((token = msyylex()) != MS_TOKEN_LITERAL_STRING) {
           msSetError(MS_PARSEERR, "Parsing fromText function failed.", "msTokenizeExpression()");
+          free(node);
           goto parse_error;
         }
 
@@ -552,6 +611,7 @@ int msTokenizeExpression(expressionObj *expression, char **list, int *listsize)
 
         if(!node->tokenval.shpval) {
           msSetError(MS_PARSEERR, "Parsing fromText function failed, WKT processing failed.", "msTokenizeExpression()");
+          free(node);
           goto parse_error;
         }
 
@@ -559,6 +619,9 @@ int msTokenizeExpression(expressionObj *expression, char **list, int *listsize)
 
         if((token = msyylex()) != 41) { /* ) */
           msSetError(MS_PARSEERR, "Parsing fromText function failed.", "msTokenizeExpression()");
+          msFreeShape(node->tokenval.shpval);
+          free(node->tokenval.shpval);
+          free(node);
           goto parse_error;
         }
         break;
@@ -596,7 +659,7 @@ parse_error:
 ** examining the contents of the various xxxxitem parameters and expressions. That list is
 ** then used to set the iteminfo variable.
 */
-int msLayerWhichItems(layerObj *layer, int get_all, char *metadata)
+int msLayerWhichItems(layerObj *layer, int get_all, const char *metadata)
 {
   int i, j, k, l, rv;
   int nt=0;
@@ -623,11 +686,14 @@ int msLayerWhichItems(layerObj *layer, int get_all, char *metadata)
   layer->filteritemindex = -1;
   layer->styleitemindex = -1;
   layer->labelitemindex = -1;
+  layer->utfitemindex = -1;
 
   if(layer->classitem) nt++;
   if(layer->filteritem) nt++;
-  if(layer->styleitem && strcasecmp(layer->styleitem, "AUTO") != 0) nt++;
-
+  if(layer->styleitem &&
+     (strcasecmp(layer->styleitem, "AUTO") != 0) &&
+     (strncasecmp(layer->styleitem, "javascript://", 13) != 0)) nt++;
+     
   if(layer->filter.type == MS_EXPRESSION)
     nt += msCountChars(layer->filter.string, '[');
 
@@ -638,6 +704,7 @@ int msLayerWhichItems(layerObj *layer, int get_all, char *metadata)
     nt += msCountChars(layer->cluster.filter.string, '[');
 
   if(layer->labelitem) nt++;
+  if(layer->utfitem) nt++;
 
   if(layer->_geomtransform.type == MS_GEOMTRANSFORM_EXPRESSION)
     msTokenizeExpression(&layer->_geomtransform, layer->items, &(layer->numitems));
@@ -674,6 +741,10 @@ int msLayerWhichItems(layerObj *layer, int get_all, char *metadata)
       nt += msCountChars(layer->class[i]->text.string, '[');
   }
 
+  /* utfgrid count */
+  if(layer->utfdata.type == MS_EXPRESSION || (layer->utfdata.string && strchr(layer->utfdata.string,'[') != NULL && strchr(layer->utfdata.string,']') != NULL))
+    nt += msCountChars(layer->utfdata.string, '[');
+
   /*
   ** allocate space for the item list (worse case size)
   */
@@ -681,14 +752,14 @@ int msLayerWhichItems(layerObj *layer, int get_all, char *metadata)
   /* always retrieve all items in some cases */
   if(layer->connectiontype == MS_INLINE || get_all == MS_TRUE ||
       (layer->map->outputformat && layer->map->outputformat->renderer == MS_RENDER_WITH_KML)) {
-    msLayerGetItems(layer);
+    rv = msLayerGetItems(layer);
     if(nt > 0) /* need to realloc the array to accept the possible new items*/
       layer->items = (char **)msSmallRealloc(layer->items, sizeof(char *)*(layer->numitems + nt));
   } else {
     rv = layer->vtable->LayerCreateItems(layer, nt);
-    if(rv != MS_SUCCESS)
-      return rv;
   }
+  if(rv != MS_SUCCESS)
+    return rv;
 
   /*
   ** build layer item list, compute item indexes for explicity item references (e.g. classitem) or item bindings
@@ -698,8 +769,11 @@ int msLayerWhichItems(layerObj *layer, int get_all, char *metadata)
     /* layer items */
     if(layer->classitem) layer->classitemindex = string2list(layer->items, &(layer->numitems), layer->classitem);
     if(layer->filteritem) layer->filteritemindex = string2list(layer->items, &(layer->numitems), layer->filteritem);
-    if(layer->styleitem && strcasecmp(layer->styleitem, "AUTO") != 0) layer->styleitemindex = string2list(layer->items, &(layer->numitems), layer->styleitem);
+    if(layer->styleitem && 
+       (strcasecmp(layer->styleitem, "AUTO") != 0) &&
+       (strncasecmp(layer->styleitem, "javascript://",13) != 0)) layer->styleitemindex = string2list(layer->items, &(layer->numitems), layer->styleitem);
     if(layer->labelitem) layer->labelitemindex = string2list(layer->items, &(layer->numitems), layer->labelitem);
+    if(layer->utfitem) layer->utfitemindex = string2list(layer->items, &(layer->numitems), layer->utfitem);
 
     /* layer classes */
     for(i=0; i<layer->numclasses; i++) {
@@ -746,6 +820,11 @@ int msLayerWhichItems(layerObj *layer, int get_all, char *metadata)
     /* cluster expressions */
     if(layer->cluster.group.type == MS_EXPRESSION) msTokenizeExpression(&(layer->cluster.group), layer->items, &(layer->numitems));
     if(layer->cluster.filter.type == MS_EXPRESSION) msTokenizeExpression(&(layer->cluster.filter), layer->items, &(layer->numitems));
+
+    /* utfdata */
+    if(layer->utfdata.type == MS_EXPRESSION || (layer->utfdata.string && strchr(layer->utfdata.string,'[') != NULL && strchr(layer->utfdata.string,']') != NULL)) {
+        msTokenizeExpression(&(layer->utfdata), layer->items, &(layer->numitems));
+    }
   }
 
   if(metadata) {
@@ -836,41 +915,75 @@ int msLayerGetAutoStyle(mapObj *map, layerObj *layer, classObj *c, shapeObj* sha
 */
 int msLayerGetFeatureStyle(mapObj *map, layerObj *layer, classObj *c, shapeObj* shape)
 {
-  char* stylestring;
+  char* stylestring = NULL;
   if (layer->styleitem && layer->styleitemindex >=0) {
-    stylestring = shape->values[layer->styleitemindex];
-    /* try to find out the current style format */
-    if (strncasecmp(stylestring,"style",5) == 0) {
-      resetClassStyle(c);
-      c->layer = layer;
-      if (msMaybeAllocateClassStyle(c, 0))
-        return(MS_FAILURE);
+    stylestring = msStrdup(shape->values[layer->styleitemindex]);
+  }
+  else if (strncasecmp(layer->styleitem,"javascript://",13) == 0) {
+#ifdef USE_V8_MAPSCRIPT
+    char *filename = layer->styleitem+13;
 
-      msUpdateStyleFromString(c->styles[0], stylestring, MS_FALSE);
-      if(c->styles[0]->symbolname) {
-        if((c->styles[0]->symbol =  msGetSymbolIndex(&(map->symbolset), c->styles[0]->symbolname, MS_TRUE)) == -1) {
-          msSetError(MS_MISCERR, "Undefined symbol \"%s\" in class of layer %s.", "msLayerGetFeatureStyle()", 
-              c->styles[0]->symbolname, layer->name);
-          return MS_FAILURE;
-        }
+    if (!map->v8context) {
+      msV8CreateContext(map);
+      if (!map->v8context)
+      {
+        msSetError(MS_V8ERR, "Unable to create v8 context.", "msLayerGetFeatureStyle()");
+        return MS_FAILURE;
       }
-    } else if (strncasecmp(stylestring,"class",5) == 0) {
-      if (strcasestr(stylestring, " style ") != NULL) {
-        /* reset style if stylestring contains style definitions */
-        resetClassStyle(c);
-        c->layer = layer;
-      }
-      msUpdateClassFromString(c, stylestring, MS_FALSE);
-    } else if (strncasecmp(stylestring,"pen",3) == 0 || strncasecmp(stylestring,"brush",5) == 0 ||
-               strncasecmp(stylestring,"symbol",6) == 0 || strncasecmp(stylestring,"label",5) == 0) {
-      msOGRUpdateStyleFromString(map, layer, c, stylestring);
-    } else {
-      resetClassStyle(c);
     }
 
-    return MS_SUCCESS;
+    if (*filename == '\0') {
+      msSetError(MS_V8ERR, "Invalid javascript filename: \"%s\".", "msLayerGetFeatureStyle()", layer->styleitem);
+      return MS_FAILURE;
+    }
+    
+    stylestring = msV8GetFeatureStyle(map, filename, layer, shape);
+#else
+      msSetError(MS_V8ERR, "V8 Javascript support is not available.", "msLayerGetFeatureStyle()");
+      return MS_FAILURE;
+#endif
   }
-  return MS_FAILURE;
+  else { /* unknown styleitem */
+    return MS_FAILURE;
+  }
+
+  /* try to find out the current style format */
+  if (!stylestring)
+    return MS_FAILURE;
+
+  if (strncasecmp(stylestring,"style",5) == 0) {
+    resetClassStyle(c);
+    c->layer = layer;
+    if (msMaybeAllocateClassStyle(c, 0)) {
+      free(stylestring);
+      return(MS_FAILURE);
+    }
+
+    msUpdateStyleFromString(c->styles[0], stylestring, MS_FALSE);
+    if(c->styles[0]->symbolname) {
+      if((c->styles[0]->symbol =  msGetSymbolIndex(&(map->symbolset), c->styles[0]->symbolname, MS_TRUE)) == -1) {
+        msSetError(MS_MISCERR, "Undefined symbol \"%s\" in class of layer %s.", "msLayerGetFeatureStyle()", 
+                   c->styles[0]->symbolname, layer->name);
+        free(stylestring);
+        return MS_FAILURE;
+      }
+    }
+  } else if (strncasecmp(stylestring,"class",5) == 0) {
+    if (strcasestr(stylestring, " style ") != NULL) {
+      /* reset style if stylestring contains style definitions */
+      resetClassStyle(c);
+      c->layer = layer;
+    }
+    msUpdateClassFromString(c, stylestring, MS_FALSE);
+  } else if (strncasecmp(stylestring,"pen",3) == 0 || strncasecmp(stylestring,"brush",5) == 0 ||
+             strncasecmp(stylestring,"symbol",6) == 0 || strncasecmp(stylestring,"label",5) == 0) {
+    msOGRUpdateStyleFromString(map, layer, c, stylestring);
+  } else {
+    resetClassStyle(c);
+  }
+
+  free(stylestring);
+  return MS_SUCCESS;
 }
 
 
@@ -975,7 +1088,8 @@ int msLayerGetMaxFeaturesToDraw(layerObj *layer, outputFormatObj *format)
 {
   int nMaxFeatures = -1;
   const char *pszTmp = NULL;
-  if (layer && format) {
+  if (layer) {
+    nMaxFeatures = layer->maxfeatures;
     pszTmp = msLookupHashTable(&layer->metadata, "maxfeaturestodraw");
     if (pszTmp)
       nMaxFeatures = atoi(pszTmp);
@@ -984,6 +1098,8 @@ int msLayerGetMaxFeaturesToDraw(layerObj *layer, outputFormatObj *format)
       if (pszTmp)
         nMaxFeatures = atoi(pszTmp);
     }
+  }
+  if(format) {
     if (nMaxFeatures < 0)
       nMaxFeatures = atoi(msGetOutputFormatOption( format, "maxfeaturestodraw", "-1"));
   }
@@ -1083,100 +1199,39 @@ makeTimeFilter(layerObj *lp,
   }
 
   atimes = msStringSplit(timestring, ',', &numtimes);
-  if (atimes == NULL || numtimes < 1)
+  if (atimes == NULL || numtimes < 1) {
+    msFreeCharArray(atimes,numtimes);
     return MS_FALSE;
+  }
 
-  if (numtimes >= 1) {
-    if (&lp->filter && lp->filter.string && lp->filter.type == MS_STRING) {
-      pszBuffer = msStringConcatenate(pszBuffer, "((");
-      pszBuffer = msStringConcatenate(pszBuffer, lp->filter.string);
-      pszBuffer = msStringConcatenate(pszBuffer, ") and ");
-      /*this flag is used to indicate that the buffer contains only the
-        existing filter. It is set to 0 when time filter parts are
-        added to the buffer */
-      bOnlyExistingFilter = 1;
-    } else
-      freeExpression(&lp->filter);
+  if (&lp->filter && lp->filter.string && lp->filter.type == MS_STRING) {
+    pszBuffer = msStringConcatenate(pszBuffer, "((");
+    pszBuffer = msStringConcatenate(pszBuffer, lp->filter.string);
+    pszBuffer = msStringConcatenate(pszBuffer, ") and ");
+    /*this flag is used to indicate that the buffer contains only the
+      existing filter. It is set to 0 when time filter parts are
+      added to the buffer */
+    bOnlyExistingFilter = 1;
+  } else
+    freeExpression(&lp->filter);
 
-    /* check to see if we have ranges by parsing the first entry */
-    tokens = msStringSplit(atimes[0],  '/', &ntmp);
-    if (ntmp == 2) { /* ranges */
-      msFreeCharArray(tokens, ntmp);
-      for (i=0; i<numtimes; i++) {
-        tokens = msStringSplit(atimes[i],  '/', &ntmp);
-        if (ntmp == 2) {
-          if (pszBuffer && strlen(pszBuffer) > 0 && bOnlyExistingFilter == 0)
-            pszBuffer = msStringConcatenate(pszBuffer, " OR ");
-          else
-            pszBuffer = msStringConcatenate(pszBuffer, "(");
-
-          bOnlyExistingFilter = 0;
-
-          pszBuffer = msStringConcatenate(pszBuffer, "(");
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer,  "`");
-
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer, "[");
-          pszBuffer = msStringConcatenate(pszBuffer, (char *)timefield);
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer, "]");
-
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer,  "`");
-
-          pszBuffer = msStringConcatenate(pszBuffer, " >= ");
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer,  "`");
-          else
-            pszBuffer = msStringConcatenate(pszBuffer,  "'");
-
-          pszBuffer = msStringConcatenate(pszBuffer, tokens[0]);
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer,  "`");
-          else
-            pszBuffer = msStringConcatenate(pszBuffer,  "'");
-          pszBuffer = msStringConcatenate(pszBuffer, " AND ");
-
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer,  "`");
-
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer, "[");
-          pszBuffer = msStringConcatenate(pszBuffer, (char *)timefield);
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer, "]");
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer,  "`");
-
-          pszBuffer = msStringConcatenate(pszBuffer, " <= ");
-
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer,  "`");
-          else
-            pszBuffer = msStringConcatenate(pszBuffer,  "'");
-          pszBuffer = msStringConcatenate(pszBuffer, tokens[1]);
-          if (addtimebacktics)
-            pszBuffer = msStringConcatenate(pszBuffer,  "`");
-          else
-            pszBuffer = msStringConcatenate(pszBuffer,  "'");
-          pszBuffer = msStringConcatenate(pszBuffer, ")");
-        }
-
-        msFreeCharArray(tokens, ntmp);
-      }
-      if (pszBuffer && strlen(pszBuffer) > 0 && bOnlyExistingFilter == 0)
-        pszBuffer = msStringConcatenate(pszBuffer, ")");
-    } else if (ntmp == 1) { /* multiple times */
-      msFreeCharArray(tokens, ntmp);
-      pszBuffer = msStringConcatenate(pszBuffer, "(");
-      for (i=0; i<numtimes; i++) {
-        if (i > 0)
+  /* check to see if we have ranges by parsing the first entry */
+  tokens = msStringSplit(atimes[0],  '/', &ntmp);
+  if (ntmp == 2) { /* ranges */
+    msFreeCharArray(tokens, ntmp);
+    for (i=0; i<numtimes; i++) {
+      tokens = msStringSplit(atimes[i],  '/', &ntmp);
+      if (ntmp == 2) {
+        if (pszBuffer && strlen(pszBuffer) > 0 && bOnlyExistingFilter == 0)
           pszBuffer = msStringConcatenate(pszBuffer, " OR ");
+        else
+          pszBuffer = msStringConcatenate(pszBuffer, "(");
+
+        bOnlyExistingFilter = 0;
 
         pszBuffer = msStringConcatenate(pszBuffer, "(");
         if (addtimebacktics)
-          pszBuffer = msStringConcatenate(pszBuffer, "`");
+          pszBuffer = msStringConcatenate(pszBuffer,  "`");
 
         if (addtimebacktics)
           pszBuffer = msStringConcatenate(pszBuffer, "[");
@@ -1185,50 +1240,108 @@ makeTimeFilter(layerObj *lp,
           pszBuffer = msStringConcatenate(pszBuffer, "]");
 
         if (addtimebacktics)
-          pszBuffer = msStringConcatenate(pszBuffer, "`");
+          pszBuffer = msStringConcatenate(pszBuffer,  "`");
 
-        pszBuffer = msStringConcatenate(pszBuffer, " = ");
-
+        pszBuffer = msStringConcatenate(pszBuffer, " >= ");
         if (addtimebacktics)
-          pszBuffer = msStringConcatenate(pszBuffer, "`");
+          pszBuffer = msStringConcatenate(pszBuffer,  "`");
         else
           pszBuffer = msStringConcatenate(pszBuffer,  "'");
-        pszBuffer = msStringConcatenate(pszBuffer, atimes[i]);
+
+        pszBuffer = msStringConcatenate(pszBuffer, tokens[0]);
+        if (addtimebacktics)
+          pszBuffer = msStringConcatenate(pszBuffer,  "`");
+        else
+          pszBuffer = msStringConcatenate(pszBuffer,  "'");
+        pszBuffer = msStringConcatenate(pszBuffer, " AND ");
+
+        if (addtimebacktics)
+          pszBuffer = msStringConcatenate(pszBuffer,  "`");
+
+        if (addtimebacktics)
+          pszBuffer = msStringConcatenate(pszBuffer, "[");
+        pszBuffer = msStringConcatenate(pszBuffer, (char *)timefield);
+        if (addtimebacktics)
+          pszBuffer = msStringConcatenate(pszBuffer, "]");
+        if (addtimebacktics)
+          pszBuffer = msStringConcatenate(pszBuffer,  "`");
+
+        pszBuffer = msStringConcatenate(pszBuffer, " <= ");
+
+        if (addtimebacktics)
+          pszBuffer = msStringConcatenate(pszBuffer,  "`");
+        else
+          pszBuffer = msStringConcatenate(pszBuffer,  "'");
+        pszBuffer = msStringConcatenate(pszBuffer, tokens[1]);
         if (addtimebacktics)
           pszBuffer = msStringConcatenate(pszBuffer,  "`");
         else
           pszBuffer = msStringConcatenate(pszBuffer,  "'");
         pszBuffer = msStringConcatenate(pszBuffer, ")");
       }
+
+      msFreeCharArray(tokens, ntmp);
+    }
+    if (pszBuffer && strlen(pszBuffer) > 0 && bOnlyExistingFilter == 0)
       pszBuffer = msStringConcatenate(pszBuffer, ")");
-    } else {
-      msFreeCharArray(atimes, numtimes);
-      return MS_FALSE;
-    }
+  } else if (ntmp == 1) { /* multiple times */
+    msFreeCharArray(tokens, ntmp);
+    pszBuffer = msStringConcatenate(pszBuffer, "(");
+    for (i=0; i<numtimes; i++) {
+      if (i > 0)
+        pszBuffer = msStringConcatenate(pszBuffer, " OR ");
 
+      pszBuffer = msStringConcatenate(pszBuffer, "(");
+      if (addtimebacktics)
+        pszBuffer = msStringConcatenate(pszBuffer, "`");
+
+      if (addtimebacktics)
+        pszBuffer = msStringConcatenate(pszBuffer, "[");
+      pszBuffer = msStringConcatenate(pszBuffer, (char *)timefield);
+      if (addtimebacktics)
+        pszBuffer = msStringConcatenate(pszBuffer, "]");
+
+      if (addtimebacktics)
+        pszBuffer = msStringConcatenate(pszBuffer, "`");
+
+      pszBuffer = msStringConcatenate(pszBuffer, " = ");
+
+      if (addtimebacktics)
+        pszBuffer = msStringConcatenate(pszBuffer, "`");
+      else
+        pszBuffer = msStringConcatenate(pszBuffer,  "'");
+      pszBuffer = msStringConcatenate(pszBuffer, atimes[i]);
+      if (addtimebacktics)
+        pszBuffer = msStringConcatenate(pszBuffer,  "`");
+      else
+        pszBuffer = msStringConcatenate(pszBuffer,  "'");
+      pszBuffer = msStringConcatenate(pszBuffer, ")");
+    }
+    pszBuffer = msStringConcatenate(pszBuffer, ")");
+  } else {
+    msFreeCharArray(tokens, ntmp);
     msFreeCharArray(atimes, numtimes);
-
-    /* load the string to the filter */
-    if (pszBuffer && strlen(pszBuffer) > 0) {
-      if(&lp->filter && lp->filter.string && lp->filter.type == MS_STRING)
-        pszBuffer = msStringConcatenate(pszBuffer, ")");
-      /*
-      if(lp->filteritem)
-        free(lp->filteritem);
-      lp->filteritem = msStrdup(timefield);
-      */
-
-      loadExpressionString(&lp->filter, pszBuffer);
-
-      if (pszBuffer)
-        msFree(pszBuffer);
-    }
-
-    return MS_TRUE;
-
+    msFree(pszBuffer);
+    return MS_FALSE;
   }
 
-  return MS_FALSE;
+  msFreeCharArray(atimes, numtimes);
+
+  /* load the string to the filter */
+  if (pszBuffer && strlen(pszBuffer) > 0) {
+    if(&lp->filter && lp->filter.string && lp->filter.type == MS_STRING)
+      pszBuffer = msStringConcatenate(pszBuffer, ")");
+    /*
+    if(lp->filteritem)
+      free(lp->filteritem);
+    lp->filteritem = msStrdup(timefield);
+    */
+
+    loadExpressionString(&lp->filter, pszBuffer);
+
+  }
+  msFree(pszBuffer);
+  return MS_TRUE;
 }
 
 /**
@@ -1329,6 +1442,66 @@ int msLayerSupportsPaging(layerObj *layer)
     return MS_TRUE;
 
   return MS_FALSE;
+}
+
+/*
+ * msLayerSupportsSorting()
+ *
+ * Returns MS_TRUE if the layer supports sorting/ordering.
+ */
+int msLayerSupportsSorting(layerObj *layer)
+{
+  if (layer &&
+      ((layer->connectiontype == MS_OGR) ||
+       (layer->connectiontype == MS_POSTGIS)) )
+    return MS_TRUE;
+
+  return MS_FALSE;
+}
+
+/*
+ * msLayerSetSort()
+ *
+ * Copy the sortBy clause passed as an argument into the layer sortBy member.
+ */
+void msLayerSetSort(layerObj *layer, const sortByClause* sortBy)
+{
+  int i;
+  for(i=0;i<layer->sortBy.nProperties;i++)
+      msFree(layer->sortBy.properties[i].item);
+  msFree(layer->sortBy.properties);
+
+  layer->sortBy.nProperties = sortBy->nProperties;
+  layer->sortBy.properties = (sortByProperties*) msSmallMalloc(
+                        sortBy->nProperties * sizeof(sortByProperties) );
+  for(i=0;i<layer->sortBy.nProperties;i++) {
+     layer->sortBy.properties[i].item = msStrdup(sortBy->properties[i].item);
+     layer->sortBy.properties[i].sortOrder = sortBy->properties[i].sortOrder;
+  }
+}
+
+/*
+ * msLayerBuildSQLOrderBy()
+ *
+ * Returns the content of a SQL ORDER BY clause from the sortBy member of
+ * the layer. The string does not contain the "ORDER BY" keywords itself.
+ */
+char* msLayerBuildSQLOrderBy(layerObj *layer)
+{
+  char* strOrderBy = NULL;
+  if( layer->sortBy.nProperties > 0 ) {
+    int i;
+    for(i=0;i<layer->sortBy.nProperties;i++) {
+      char* escaped = msLayerEscapePropertyName(layer, layer->sortBy.properties[i].item);
+      if( i > 0 )
+          strOrderBy = msStringConcatenate(strOrderBy, ", ");
+      strOrderBy = msStringConcatenate(strOrderBy, escaped);
+      if( layer->sortBy.properties[i].sortOrder == SORT_DESC )
+          strOrderBy = msStringConcatenate(strOrderBy, " DESC");
+      msFree(escaped);
+    }
+  }
+  return strOrderBy;
 }
 
 int
@@ -1650,6 +1823,12 @@ int msInitializeVirtualTable(layerObj *layer)
  * INLINE: Virtual table functions
  */
 
+typedef struct {
+  rectObj searchrect;
+  int is_relative; /* relative coordinates? */
+}
+msINLINELayerInfo;
+
 int msINLINELayerIsOpen(layerObj *layer)
 {
   if (layer->currentfeature)
@@ -1658,11 +1837,59 @@ int msINLINELayerIsOpen(layerObj *layer)
     return(MS_FALSE);
 }
 
+msINLINELayerInfo *msINLINECreateLayerInfo(void)
+{
+  msINLINELayerInfo *layerinfo = msSmallMalloc(sizeof(msINLINELayerInfo));
+  layerinfo->searchrect.minx = -1.0;
+  layerinfo->searchrect.miny = -1.0;
+  layerinfo->searchrect.maxx = -1.0;
+  layerinfo->searchrect.maxy = -1.0;
+  layerinfo->is_relative = MS_FALSE;
+  return layerinfo;  
+}
 
 int msINLINELayerOpen(layerObj *layer)
 {
+  msINLINELayerInfo  *layerinfo;
+
+  if (layer->layerinfo) {
+    if (layer->debug) {
+      msDebug("msINLINELayerOpen: Layer is already open!\n");
+    }
+    return MS_SUCCESS;  /* already open */
+  }
+  
+  /*
+  ** Initialize the layerinfo
+  **/
+  layerinfo = msINLINECreateLayerInfo();
+  
   layer->currentfeature = layer->features; /* point to the begining of the feature list */
+
+  layer->layerinfo = (void*)layerinfo;
+  
   return(MS_SUCCESS);
+}
+
+int msINLINELayerClose(layerObj *layer)
+{
+  if (layer->layerinfo) {
+    free(layer->layerinfo);
+    layer->layerinfo = NULL;
+  }
+
+  return MS_SUCCESS;
+}
+
+int msINLINELayerWhichShapes(layerObj *layer, rectObj rect, int isQuery)
+{
+  msINLINELayerInfo *layerinfo = NULL;  
+  layerinfo = (msINLINELayerInfo*) layer->layerinfo;
+
+  layerinfo->searchrect = rect;
+  layerinfo->is_relative = (layer->transform != MS_FALSE && layer->transform != MS_TRUE);
+  
+  return MS_SUCCESS;
 }
 
 /* Author: Cristoph Spoerri and Sean Gillies */
@@ -1699,23 +1926,38 @@ int msINLINELayerGetShape(layerObj *layer, shapeObj *shape, resultObj *record)
 
 int msINLINELayerNextShape(layerObj *layer, shapeObj *shape)
 {
-  if( ! (layer->currentfeature)) {
-    /* out of features */
-    return(MS_DONE);
+  msINLINELayerInfo *layerinfo = NULL;  
+  shapeObj * s;
+  
+  layerinfo = (msINLINELayerInfo*) layer->layerinfo;
+  
+  while (1) {
+
+    if( ! (layer->currentfeature)) {
+      /* out of features */
+      return(MS_DONE);
+    }
+
+    s = &(layer->currentfeature->shape);
+    layer->currentfeature = layer->currentfeature->next;
+    msComputeBounds(s);
+
+    if (layerinfo->is_relative || msRectOverlap(&s->bounds, &layerinfo->searchrect)) {
+   
+      msCopyShape(s, shape);
+
+      /* check for the expected size of the values array */
+      if (layer->numitems > shape->numvalues) {
+        int i;
+        shape->values = (char **)msSmallRealloc(shape->values, sizeof(char *)*(layer->numitems));
+        for (i = shape->numvalues; i < layer->numitems; i++)
+          shape->values[i] = msStrdup("");
+      }
+
+      break;
+    }
+    
   }
-
-  msCopyShape(&(layer->currentfeature->shape), shape);
-
-  layer->currentfeature = layer->currentfeature->next;
-
-  /* check for the expected size of the values array */
-  if (layer->numitems > shape->numvalues) {
-    int i;
-    shape->values = (char **)msSmallRealloc(shape->values, sizeof(char *)*(layer->numitems));
-    for (i = shape->numvalues; i < layer->numitems; i++)
-      shape->values[i] = msStrdup("");
-  }
-  msComputeBounds(shape);
 
   return(MS_SUCCESS);
 }
@@ -1769,10 +2011,10 @@ msINLINELayerInitializeVirtualTable(layerObj *layer)
   /* layer->vtable->LayerFreeItemInfo, use default */
   layer->vtable->LayerOpen = msINLINELayerOpen;
   layer->vtable->LayerIsOpen = msINLINELayerIsOpen;
-  /* layer->vtable->LayerWhichShapes, use default */
+  layer->vtable->LayerWhichShapes = msINLINELayerWhichShapes;
   layer->vtable->LayerNextShape = msINLINELayerNextShape;
   layer->vtable->LayerGetShape = msINLINELayerGetShape;
-  /* layer->vtable->LayerClose, use default */
+  layer->vtable->LayerClose = msINLINELayerClose;
   /* layer->vtable->LayerGetItems, use default */
 
   /*

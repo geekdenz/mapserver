@@ -54,10 +54,7 @@
 static void * SfRealloc( void * pMem, int nNewSize )
 
 {
-  if( pMem == NULL )
-    return( (void *) malloc(nNewSize) );
-  else
-    return( (void *) realloc(pMem,nNewSize) );
+  return( (void *) realloc(pMem,nNewSize) );
 }
 
 /************************************************************************/
@@ -162,11 +159,11 @@ DBFHandle msDBFOpen( const char * pszFilename, const char * pszAccess )
   pszDBFFilename = (char *) msSmallMalloc(strlen(pszFilename)+1);
   strcpy( pszDBFFilename, pszFilename );
 
-  if( strcmp(pszFilename+strlen(pszFilename)-4,".shp")
-      || strcmp(pszFilename+strlen(pszFilename)-4,".shx") ) {
+  if( strcmp(pszFilename+strlen(pszFilename)-4,".shp") == 0
+      || strcmp(pszFilename+strlen(pszFilename)-4,".shx") == 0 ) {
     strcpy( pszDBFFilename+strlen(pszDBFFilename)-4, ".dbf");
-  } else if( strcmp(pszFilename+strlen(pszFilename)-4,".SHP")
-             || strcmp(pszFilename+strlen(pszFilename)-4,".SHX") ) {
+  } else if( strcmp(pszFilename+strlen(pszFilename)-4,".SHP") == 0
+             || strcmp(pszFilename+strlen(pszFilename)-4,".SHX") == 0 ) {
     strcpy( pszDBFFilename+strlen(pszDBFFilename)-4, ".DBF");
   }
 
@@ -177,7 +174,17 @@ DBFHandle msDBFOpen( const char * pszFilename, const char * pszAccess )
   MS_CHECK_ALLOC(psDBF, sizeof(DBFInfo), NULL);
   psDBF->fp = fopen( pszDBFFilename, pszAccess );
   if( psDBF->fp == NULL )
+  {
+    if( strcmp(pszDBFFilename+strlen(pszDBFFilename)-4,".dbf") == 0 ) {
+      strcpy( pszDBFFilename+strlen(pszDBFFilename)-4, ".DBF");
+      psDBF->fp = fopen( pszDBFFilename, pszAccess );
+    }
+  }
+  if( psDBF->fp == NULL ) {
+    msFree(pszDBFFilename);
+    msFree(psDBF);
     return( NULL );
+  }
 
   psDBF->bNoHeader = MS_FALSE;
   psDBF->nCurrentRecord = -1;
@@ -294,7 +301,7 @@ void  msDBFClose(DBFHandle psDBF)
   free( psDBF->pszHeader );
   free( psDBF->pszCurrentRecord );
 
-  if(psDBF->pszStringField) free(psDBF->pszStringField);
+  free(psDBF->pszStringField);
 
   free( psDBF );
 }
@@ -330,7 +337,7 @@ DBFHandle msDBFCreate( const char * pszFilename )
   psDBF = (DBFHandle) malloc(sizeof(DBFInfo));
   if (psDBF == NULL) {
     msSetError(MS_MEMERR, "%s: %d: Out of memory allocating %u bytes.\n", "msDBFCreate()",
-               __FILE__, __LINE__, sizeof(DBFInfo));
+               __FILE__, __LINE__, (unsigned int)sizeof(DBFInfo));
     fclose(fp);
     return NULL;
   }
@@ -459,7 +466,7 @@ int msDBFAddField(DBFHandle psDBF, const char * pszFieldName, DBFFieldType eType
 /*      Based on DBFIsAttributeNULL of shapelib                         */
 /************************************************************************/
 
-int DBFIsValueNULL( const char* pszValue, char type )
+static int DBFIsValueNULL( const char* pszValue, char type )
 
 {
   switch(type) {
@@ -487,13 +494,13 @@ int DBFIsValueNULL( const char* pszValue, char type )
 /*                                                                      */
 /*      Read one of the attribute fields of a record.                   */
 /************************************************************************/
-static char *msDBFReadAttribute(DBFHandle psDBF, int hEntity, int iField )
+static const char *msDBFReadAttribute(DBFHandle psDBF, int hEntity, int iField )
 
 {
   int         i;
   unsigned int nRecordOffset;
-  uchar *pabyRec;
-  char  *pReturnField = NULL;
+  const uchar *pabyRec;
+  const char  *pReturnField = NULL;
 
   /* -------------------------------------------------------------------- */
   /*  Is the request valid?                             */
@@ -522,7 +529,7 @@ static char *msDBFReadAttribute(DBFHandle psDBF, int hEntity, int iField )
     psDBF->nCurrentRecord = hEntity;
   }
 
-  pabyRec = (uchar *) psDBF->pszCurrentRecord;
+  pabyRec = (const uchar *) psDBF->pszCurrentRecord;
   /* DEBUG */
   /* printf("CurrentRecord(%c):%s\n", psDBF->pachFieldType[iField], pabyRec); */
 
@@ -537,7 +544,7 @@ static char *msDBFReadAttribute(DBFHandle psDBF, int hEntity, int iField )
   /* -------------------------------------------------------------------- */
   /*  Extract the requested field.              */
   /* -------------------------------------------------------------------- */
-  strncpy( psDBF->pszStringField,(char *) pabyRec+psDBF->panFieldOffset[iField], psDBF->panFieldSize[iField] );
+  strncpy( psDBF->pszStringField,(const char *) pabyRec+psDBF->panFieldOffset[iField], psDBF->panFieldSize[iField] );
   psDBF->pszStringField[psDBF->panFieldSize[iField]] = '\0';
 
   /*

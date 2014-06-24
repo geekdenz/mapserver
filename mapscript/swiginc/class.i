@@ -55,7 +55,6 @@
                 return NULL;
             if (initClass(layer->class[layer->numclasses]) == -1)
                 return NULL;
-            layer->class[layer->numclasses]->type = layer->type;
             layer->class[layer->numclasses]->layer = layer;
 	    MS_REFCNT_INCR(layer->class[layer->numclasses]);
             layer->numclasses++;
@@ -178,7 +177,7 @@
   }
   
   int drawLegendIcon(mapObj *map, layerObj *layer, int width, int height, imageObj *dstImage, int dstX, int dstY) {
-    return msDrawLegendIcon(map, layer, self, width, height, dstImage, dstX, dstY, MS_TRUE);
+    return msDrawLegendIcon(map, layer, self, width, height, dstImage, dstX, dstY, MS_TRUE, NULL);
   }
  
   %newobject createLegendIcon;

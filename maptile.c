@@ -61,6 +61,7 @@ static int msTileGetGMapCoords(const char *coordstring, int *x, int *y, int *zoo
   if( coordstring ) {
     coords = msStringSplit(coordstring, ' ', &(num_coords));
     if( num_coords != 3 ) {
+      msFreeCharArray(coords, num_coords);
       msSetError(MS_WEBERR, "Invalid number of tile coordinates (should be three).", "msTileSetup()");
       return MS_FAILURE;
     }
@@ -75,7 +76,8 @@ static int msTileGetGMapCoords(const char *coordstring, int *x, int *y, int *zoo
     *y = strtol(coords[1], NULL, 10);
   if( zoom )
     *zoom = strtol(coords[2], NULL, 10);
-
+  
+  msFreeCharArray(coords, 3);
   return MS_SUCCESS;
 }
 
@@ -217,7 +219,10 @@ static imageObj* msTileExtractSubTile(const mapservObj *msObj, const imageObj *i
 
 
 
-  renderer->mergeRasterBuffer(imgOut,&imgBuffer,1.0,mini, minj,0, 0,params.tile_size, params.tile_size);
+  if(UNLIKELY(MS_FAILURE == renderer->mergeRasterBuffer(imgOut,&imgBuffer,1.0,mini, minj,0, 0,params.tile_size, params.tile_size))) {
+    msFreeImage(imgOut);
+    return NULL;
+  }
 
   return imgOut;
 }

@@ -34,6 +34,7 @@
 #include "mapfile.h"
 #include "mapcopy.h"
 #include "mapthread.h"
+#include "fontcache.h"
 
 
 
@@ -85,7 +86,7 @@ double msSymbolGetDefaultSize(symbolObj *s)
       break;
     case(MS_SYMBOL_SVG):
       size = 1;
-#ifdef USE_SVG_CAIRO
+#if defined(USE_SVG_CAIRO) || defined (USE_RSVG)
       assert(s->renderer_cache != NULL);
       size = s->sizey;
 #endif
@@ -112,19 +113,16 @@ void initSymbol(symbolObj *s)
   s->filled = MS_FALSE;
   s->numpoints=0;
   s->renderer=NULL;
+  s->renderer_free_func = NULL;
   s->renderer_cache = NULL;
   s->pixmap_buffer=NULL;
   s->imagepath = NULL;
   s->name = NULL;
   s->inmapfile = MS_FALSE;
-  s->antialias = MS_FALSE;
   s->font = NULL;
-  s->full_font_path = NULL;
   s->full_pixmap_path = NULL;
   s->character = NULL;
   s->anchorpoint_x = s->anchorpoint_y = 0.5;
-
-  s->svg_text = NULL;
 
 }
 
@@ -136,8 +134,12 @@ int msFreeSymbol(symbolObj *s)
   }
 
   if(s->name) free(s->name);
-  if(s->renderer!=NULL) {
-    s->renderer->freeSymbol(s);
+  if(s->renderer_free_func) {
+    s->renderer_free_func(s);
+  } else {
+    if(s->renderer!=NULL) {
+      s->renderer->freeSymbol(s);
+    }
   }
   if(s->pixmap_buffer) {
     msFreeRasterBuffer(s->pixmap_buffer);
@@ -146,13 +148,9 @@ int msFreeSymbol(symbolObj *s)
 
 
   if(s->font) free(s->font);
-  msFree(s->full_font_path);
   msFree(s->full_pixmap_path);
   if(s->imagepath) free(s->imagepath);
   if(s->character) free(s->character);
-
-  if (s->svg_text)
-    msFree(s->svg_text);
 
   return MS_SUCCESS;
 }
@@ -174,9 +172,8 @@ int loadSymbol(symbolObj *s, char *symbolpath)
           return(-1);
         }
         break;
-      case(ANTIALIAS):
-        if((s->antialias = getSymbol(2,MS_TRUE,MS_FALSE)) == -1)
-          return(-1);
+      case(ANTIALIAS): /*ignore*/
+        msyylex();
         break;
       case(CHARACTER):
         if(getString(&s->character) == MS_FAILURE) return(-1);
@@ -285,6 +282,7 @@ int loadSymbol(symbolObj *s, char *symbolpath)
         return(-1);
     } /* end switch */
   } /* end for */
+  return done;
 }
 
 void writeSymbol(symbolObj *s, FILE *stream)
@@ -305,7 +303,6 @@ void writeSymbol(symbolObj *s, FILE *stream)
       break;
     case(MS_SYMBOL_TRUETYPE):
       msIO_fprintf(stream, "    TYPE TRUETYPE\n");
-      if(s->antialias == MS_TRUE) msIO_fprintf(stream, "    ANTIALIAS TRUE\n");
       if (s->character != NULL) msIO_fprintf(stream, "    CHARACTER \"%s\"\n", s->character);
       if (s->font != NULL) msIO_fprintf(stream, "    FONT \"%s\"\n", s->font);
       break;
@@ -347,6 +344,7 @@ int msAddImageSymbol(symbolSetObj *symbolset, char *filename)
 {
   char szPath[MS_MAXPATHLEN];
   symbolObj *symbol=NULL;
+  char *extension=NULL;
 
   if(!symbolset) {
     msSetError(MS_SYMERR, "Symbol structure unallocated.", "msAddImageSymbol()");
@@ -359,6 +357,16 @@ int msAddImageSymbol(symbolSetObj *symbolset, char *filename)
   if (msGrowSymbolSet(symbolset) == NULL)
     return -1;
   symbol = symbolset->symbol[symbolset->numsymbols];
+
+  /* check if svg checking extension otherwise assume it's a pixmap */
+  extension = strrchr(filename, '.');
+  if (extension == NULL)
+    extension = "";
+  if (strncasecmp(extension, ".svg", 4) == 0) {
+    symbol->type = MS_SYMBOL_SVG;
+  } else {
+    symbol->type = MS_SYMBOL_PIXMAP;
+  }
 
 #ifdef USE_CURL
   if (strncasecmp(filename, "http", 4) == 0) {
@@ -375,9 +383,14 @@ int msAddImageSymbol(symbolSetObj *symbolset, char *filename)
       tmpfullfilename = msBuildPath(szPath, tmppath, tmpfilename);
       if (tmpfullfilename) {
         /*use the url for now as a caching mechanism*/
-        if (msHTTPGetFile(filename, tmpfullfilename, &status, -1, bCheckLocalCache, 0) == MS_SUCCESS) {
+        if (msHTTPGetFile(filename, tmpfullfilename, &status, -1, bCheckLocalCache, 0, 1024*1024 /* 1 MegaByte */) == MS_SUCCESS) {
           symbol->imagepath = msStrdup(tmpfullfilename);
           symbol->full_pixmap_path = msStrdup(tmpfullfilename);
+        } else {
+          unlink(tmpfullfilename); 
+          msFree(tmpfilename);
+          msFree(tmppath);
+          return MS_FAILURE;
         }
       }
       msFree(tmpfilename);
@@ -395,7 +408,6 @@ int msAddImageSymbol(symbolSetObj *symbolset, char *filename)
     symbol->imagepath = msStrdup(filename);
   }
   symbol->name = msStrdup(filename);
-  symbol->type = MS_SYMBOL_PIXMAP;
   return(symbolset->numsymbols++);
 }
 
@@ -602,19 +614,36 @@ int loadSymbolSet(symbolSetObj *symbolset, mapObj *map)
   return(status);
 }
 
+int msGetCharacterSize(mapObj *map, char* font, int size, char *character, rectObj *r) {
+  unsigned int unicode, codepoint;
+  glyph_element *glyph;
+  face_element *face = msGetFontFace(font, &map->fontset);
+  if(UNLIKELY(!face)) return MS_FAILURE;
+  msUTF8ToUniChar(character, &unicode);
+  codepoint = msGetGlyphIndex(face,unicode);
+  glyph = msGetGlyphByIndex(face,size,codepoint);
+  if(UNLIKELY(!glyph)) return MS_FAILURE;
+  if(glyph) {
+    r->minx = glyph->metrics.minx;
+    r->maxx = glyph->metrics.maxx;
+    r->miny = - glyph->metrics.maxy;
+    r->maxy = - glyph->metrics.miny;
+  }
+  return MS_SUCCESS;
+}
+
 /*
 ** Returns the size, in pixels, of a marker symbol defined by a specific style and scalefactor. Used for annotation
 ** layer collision avoidance. A marker is made up of a number of styles so the calling code must either do the looping
 ** itself or call this function for the bottom style which should be the largest.
 */
-int msGetMarkerSize(symbolSetObj *symbolset, styleObj *style, double *width, double *height, double scalefactor)
+int msGetMarkerSize(mapObj *map, styleObj *style, double *width, double *height, double scalefactor)
 {
-  rectObj rect;
   int size;
   symbolObj *symbol;
   *width = *height = 0; /* set a starting value */
 
-  if(style->symbol > symbolset->numsymbols || style->symbol < 0) return(MS_FAILURE); /* no such symbol, 0 is OK */
+  if(style->symbol > map->symbolset.numsymbols || style->symbol < 0) return(MS_FAILURE); /* no such symbol, 0 is OK */
 
   if(style->symbol == 0) { /* single point */
     *width = 1;
@@ -622,13 +651,13 @@ int msGetMarkerSize(symbolSetObj *symbolset, styleObj *style, double *width, dou
     return(MS_SUCCESS);
   }
 
-  symbol = symbolset->symbol[style->symbol];
+  symbol = map->symbolset.symbol[style->symbol];
   if (symbol->type == MS_SYMBOL_PIXMAP && !symbol->pixmap_buffer) {
-    if (MS_SUCCESS != msPreloadImageSymbol(MS_MAP_RENDERER(symbolset->map), symbol))
+    if (MS_SUCCESS != msPreloadImageSymbol(MS_MAP_RENDERER(map), symbol))
       return MS_FAILURE;
   }
   if(symbol->type == MS_SYMBOL_SVG && !symbol->renderer_cache) {
-#ifdef USE_SVG_CAIRO
+#if defined(USE_SVG_CAIRO) || defined (USE_RSVG)
     if(MS_SUCCESS != msPreloadSVGSymbol(symbol))
       return MS_FAILURE;
 #else
@@ -645,12 +674,14 @@ int msGetMarkerSize(symbolSetObj *symbolset, styleObj *style, double *width, dou
 
   switch(symbol->type) {
 
-    case(MS_SYMBOL_TRUETYPE):
-      if(msGetTruetypeTextBBox(MS_MAP_RENDERER(symbolset->map),symbol->font,symbolset->fontset,size,symbol->character,&rect,NULL,0) != MS_SUCCESS)
-        return(MS_FAILURE);
+    case(MS_SYMBOL_TRUETYPE): {
+      rectObj gbounds;
+      if(UNLIKELY(MS_FAILURE == msGetCharacterSize(map,symbol->font,size,symbol->character, &gbounds)))
+        return MS_FAILURE;
 
-      *width = MS_MAX(*width, rect.maxx - rect.minx);
-      *height = MS_MAX(*height, rect.maxy - rect.miny);
+      *width = MS_MAX(*width, (gbounds.maxx-gbounds.minx));
+      *height = MS_MAX(*height, (gbounds.maxy-gbounds.miny));
+    }
 
       break;
 
@@ -880,7 +911,6 @@ int msCopySymbol(symbolObj *dst, symbolObj *src, mapObj *map)
   MS_COPYSTELEM(transparent);
   MS_COPYSTELEM(transparentcolor);
   MS_COPYSTRING(dst->character, src->character);
-  MS_COPYSTELEM(antialias);
   MS_COPYSTRING(dst->font, src->font);
   MS_COPYSTRING(dst->full_pixmap_path,src->full_pixmap_path);
 
@@ -976,7 +1006,7 @@ symbolObj *msRotateVectorSymbol(symbolObj *symbol, double angle)
   /* center at 0,0 and rotate; then move back */
   for( i=0; i < symbol->numpoints; i++) {
     /* don't rotate PENUP commands (TODO: should use a constant here) */
-    if ((symbol->points[i].x == -99.0) || (symbol->points[i].x == -99.0) ) {
+    if ((symbol->points[i].x == -99.0) && (symbol->points[i].y == -99.0) ) {
       newSymbol->points[i].x = -99.0;
       newSymbol->points[i].y = -99.0;
       continue;
@@ -992,7 +1022,7 @@ symbolObj *msRotateVectorSymbol(symbolObj *symbol, double angle)
     xcor = minx*-1.0; /* symbols always start at 0,0 so get the shift vector */
     ycor = miny*-1.0;
     for( i=0; i < newSymbol->numpoints; i++) {
-      if ((newSymbol->points[i].x == -99.0) || (newSymbol->points[i].x == -99.0))
+      if ((newSymbol->points[i].x == -99.0) && (newSymbol->points[i].y == -99.0))
         continue;
       newSymbol->points[i].x = newSymbol->points[i].x + xcor;
       newSymbol->points[i].y = newSymbol->points[i].y + ycor;

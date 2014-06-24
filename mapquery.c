@@ -44,7 +44,7 @@ int msInitQuery(queryObj *query)
 
   query->point.x = query->point.y = -1;
   query->buffer = 0.0;
-  query->maxresults = 0;
+  query->maxresults = 0; /* only used by msQueryByPoint() apparently */
 
   query->rect.minx = query->rect.miny = query->rect.maxx = query->rect.maxy = -1;
   query->shape = NULL;
@@ -54,6 +54,7 @@ int msInitQuery(queryObj *query)
 
   query->maxfeatures = -1;
   query->startindex = -1;
+  query->only_cache_result_count = 0;
   
   query->item = query->str = NULL;
   query->filter = NULL;
@@ -165,6 +166,7 @@ static int addResult(resultCacheObj *cache, shapeObj *shape)
   cache->results[i].resultindex = shape->resultindex;
   cache->numresults++;
 
+  cache->previousBounds = cache->bounds;
   if(cache->numresults == 1)
     cache->bounds = shape->bounds;
   else
@@ -239,7 +241,7 @@ static int loadQueryResults(mapObj *map, FILE *stream)
     GET_LAYER(map, j)->resultcache = (resultCacheObj *)malloc(sizeof(resultCacheObj)); /* allocate and initialize the result cache */
     MS_CHECK_ALLOC(GET_LAYER(map, j)->resultcache, sizeof(resultCacheObj), MS_FAILURE);
 
-    if(1 != fread(&(GET_LAYER(map, j)->resultcache->numresults), sizeof(int), 1, stream)) { /* number of results */
+    if(1 != fread(&(GET_LAYER(map, j)->resultcache->numresults), sizeof(int), 1, stream) || (GET_LAYER(map, j)->resultcache->numresults < 0)) { /* number of results */
       msSetError(MS_MISCERR,"failed to read number of results from query file stream", "loadQueryResults()");
       free(GET_LAYER(map, j)->resultcache);
       GET_LAYER(map, j)->resultcache = NULL;
@@ -257,7 +259,7 @@ static int loadQueryResults(mapObj *map, FILE *stream)
     GET_LAYER(map, j)->resultcache->results = (resultObj *) malloc(sizeof(resultObj)*GET_LAYER(map, j)->resultcache->numresults);
     if (GET_LAYER(map, j)->resultcache->results == NULL) {
       msSetError(MS_MEMERR, "%s: %d: Out of memory allocating %u bytes.\n", "loadQueryResults()",
-                 __FILE__, __LINE__, sizeof(resultObj)*GET_LAYER(map, j)->resultcache->numresults);
+                 __FILE__, __LINE__, (unsigned int)(sizeof(resultObj)*GET_LAYER(map, j)->resultcache->numresults));
       free(GET_LAYER(map, j)->resultcache);
       GET_LAYER(map, j)->resultcache = NULL;
       return MS_FAILURE;
@@ -375,7 +377,7 @@ static int loadQueryParams(mapObj *map, FILE *stream)
 
           if(fscanf(stream, "%d\n", &numlines) != 1) goto parse_error;
           for(i=0; i<numlines; i++) {
-            if(fscanf(stream, "%d\n", &numpoints) != 1) goto parse_error;
+            if(fscanf(stream, "%d\n", &numpoints) != 1 || numpoints<0) goto parse_error;
 
             line.numpoints = numpoints;
             line.point = (pointObj *) msSmallMalloc(line.numpoints*sizeof(pointObj));
@@ -720,7 +722,7 @@ int msQueryByAttributes(mapObj *map)
     if ( (shape.type == MS_SHAPE_LINE || shape.type == MS_SHAPE_POLYGON) && (minfeaturesize > 0) ) {
       if (msShapeCheckSize(&shape, minfeaturesize) == MS_FALSE) {
         if( lp->debug >= MS_DEBUGLEVEL_V )
-          msDebug("msQueryByAttributes(): Skipping shape (%d) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
+          msDebug("msQueryByAttributes(): Skipping shape (%ld) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
         msFreeShape(&shape);
         continue;
       }
@@ -920,7 +922,7 @@ int msQueryByFilter(mapObj *map)
       if ( (shape.type == MS_SHAPE_LINE || shape.type == MS_SHAPE_POLYGON) && (minfeaturesize > 0) ) {
         if (msShapeCheckSize(&shape, minfeaturesize) == MS_FALSE) {
           if( lp->debug >= MS_DEBUGLEVEL_V )
-            msDebug("msQueryByFilter(): Skipping shape (%d) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
+            msDebug("msQueryByFilter(): Skipping shape (%ld) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
           msFreeShape(&shape);
           continue;
         }
@@ -950,8 +952,11 @@ int msQueryByFilter(mapObj *map)
         msFreeShape(&shape);
         continue;
       }
-      
-      addResult(lp->resultcache, &shape);
+    
+      if( map->query.only_cache_result_count )
+        lp->resultcache->numresults ++;
+      else
+        addResult(lp->resultcache, &shape);
       msFreeShape(&shape);
 
       /* check shape count */
@@ -967,7 +972,8 @@ int msQueryByFilter(mapObj *map)
     freeExpression(&old_filter);
 
     if(status != MS_DONE) goto query_error;
-    if(lp->resultcache->numresults == 0) msLayerClose(lp); /* no need to keep the layer open */
+    if(!map->query.only_cache_result_count &&
+        lp->resultcache->numresults == 0) msLayerClose(lp); /* no need to keep the layer open */
 
   } /* next layer */
 
@@ -996,7 +1002,7 @@ int msQueryByRect(mapObj *map)
 
   char status;
   shapeObj shape, searchshape;
-  rectObj searchrect;
+  rectObj searchrect, searchrectInMapProj;
   double layer_tolerance = 0, tolerance = 0;
 
   int paging;
@@ -1067,6 +1073,7 @@ int msQueryByRect(mapObj *map)
       searchrect.miny -= tolerance;
       searchrect.maxy += tolerance;
     }
+    searchrectInMapProj = searchrect;
 
     msRectToPolygon(searchrect, &searchshape);
 
@@ -1082,12 +1089,18 @@ int msQueryByRect(mapObj *map)
     paging = msLayerGetPaging(lp);
     msLayerClose(lp); /* reset */
     status = msLayerOpen(lp);
-    if(status != MS_SUCCESS) return(MS_FAILURE);
+    if(status != MS_SUCCESS) {
+        msFreeShape(&searchshape);
+        return(MS_FAILURE);
+    }
     msLayerEnablePaging(lp, paging);
 
     /* build item list, we want *all* items */
     status = msLayerWhichItems(lp, MS_TRUE, NULL);
-    if(status != MS_SUCCESS) return(MS_FAILURE);
+    if(status != MS_SUCCESS) {
+        msFreeShape(&searchshape);
+        return(MS_FAILURE);
+    }
 
 #ifdef USE_PROJ
     if(lp->project && msProjectionsDiffer(&(lp->projection), &(map->projection)))
@@ -1101,6 +1114,7 @@ int msQueryByRect(mapObj *map)
       continue;
     } else if(status != MS_SUCCESS) {
       msLayerClose(lp);
+      msFreeShape(&searchshape);
       return(MS_FAILURE);
     }
 
@@ -1122,7 +1136,7 @@ int msQueryByRect(mapObj *map)
       if ( (shape.type == MS_SHAPE_LINE || shape.type == MS_SHAPE_POLYGON) && (minfeaturesize > 0) ) {
         if (msShapeCheckSize(&shape, minfeaturesize) == MS_FALSE) {
           if( lp->debug >= MS_DEBUGLEVEL_V )
-            msDebug("msQueryByRect(): Skipping shape (%d) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
+            msDebug("msQueryByRect(): Skipping shape (%ld) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
           msFreeShape(&shape);
           continue;
         }
@@ -1146,7 +1160,7 @@ int msQueryByRect(mapObj *map)
         lp->project = MS_FALSE;
 #endif
 
-      if(msRectContained(&shape.bounds, &searchrect) == MS_TRUE) { /* if the whole shape is in, don't intersect */
+      if(msRectContained(&shape.bounds, &searchrectInMapProj) == MS_TRUE) { /* if the whole shape is in, don't intersect */
         status = MS_TRUE;
       } else {
         switch(shape.type) { /* make sure shape actually intersects the qrect (ADD FUNCTIONS SPECIFIC TO RECTOBJ) */
@@ -1171,7 +1185,10 @@ int msQueryByRect(mapObj *map)
           msFreeShape(&shape);
           continue;
         }
-        addResult(lp->resultcache, &shape);
+        if( map->query.only_cache_result_count )
+            lp->resultcache->numresults ++;
+        else
+            addResult(lp->resultcache, &shape);
         --map->query.maxfeatures;
       }
       msFreeShape(&shape);
@@ -1187,9 +1204,13 @@ int msQueryByRect(mapObj *map)
     if (classgroup)
       msFree(classgroup);
 
-    if(status != MS_DONE) return(MS_FAILURE);
+    if(status != MS_DONE) {
+        msFreeShape(&searchshape);
+        return(MS_FAILURE);
+    }
 
-    if(lp->resultcache->numresults == 0) msLayerClose(lp); /* no need to keep the layer open */
+    if( !map->query.only_cache_result_count &&
+        lp->resultcache->numresults == 0) msLayerClose(lp); /* no need to keep the layer open */
   } /* next layer */
 
   msFreeShape(&searchshape);
@@ -1393,7 +1414,7 @@ int msQueryByFeatures(mapObj *map)
         if ( (shape.type == MS_SHAPE_LINE || shape.type == MS_SHAPE_POLYGON) && (minfeaturesize > 0) ) {
           if (msShapeCheckSize(&shape, minfeaturesize) == MS_FALSE) {
             if( lp->debug >= MS_DEBUGLEVEL_V )
-              msDebug("msQueryByFeature(): Skipping shape (%d) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
+              msDebug("msQueryByFeature(): Skipping shape (%ld) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
             msFreeShape(&shape);
             continue;
           }
@@ -1679,7 +1700,7 @@ int msQueryByPoint(mapObj *map)
       if ( (shape.type == MS_SHAPE_LINE || shape.type == MS_SHAPE_POLYGON) && (minfeaturesize > 0) ) {
         if (msShapeCheckSize(&shape, minfeaturesize) == MS_FALSE) {
           if( lp->debug >= MS_DEBUGLEVEL_V )
-            msDebug("msQueryByPoint(): Skipping shape (%d) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
+            msDebug("msQueryByPoint(): Skipping shape (%ld) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
           msFreeShape(&shape);
           continue;
         }
@@ -1889,7 +1910,6 @@ int msQueryByShape(mapObj *map)
     initResultCache( lp->resultcache);
 
     nclasses = 0;
-    classgroup = NULL;
     if (lp->classgroup && lp->numclasses > 0)
       classgroup = msAllocateValidClassGroups(lp, &nclasses);
 
@@ -1902,7 +1922,7 @@ int msQueryByShape(mapObj *map)
       if ( (shape.type == MS_SHAPE_LINE || shape.type == MS_SHAPE_POLYGON) && (minfeaturesize > 0) ) {
         if (msShapeCheckSize(&shape, minfeaturesize) == MS_FALSE) {
           if( lp->debug >= MS_DEBUGLEVEL_V )
-            msDebug("msQueryByShape(): Skipping shape (%d) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
+            msDebug("msQueryByShape(): Skipping shape (%ld) because LAYER::MINFEATURESIZE is bigger than shape size\n", shape.index);
           msFreeShape(&shape);
           continue;
         }
@@ -2017,9 +2037,14 @@ int msQueryByShape(mapObj *map)
       }
     } /* next shape */
 
-    if(status != MS_DONE) return(MS_FAILURE);
+    if(status != MS_DONE) {
+      free(classgroup);
+      return(MS_FAILURE);
+    }
 
     if(lp->resultcache->numresults == 0) msLayerClose(lp); /* no need to keep the layer open */
+    free(classgroup);
+    classgroup = NULL;
   } /* next layer */
 
   /* was anything found? */

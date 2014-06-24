@@ -31,12 +31,14 @@
 
 #include "mapserver.h"
 #include "maperror.h"
+#include "mapthread.h"
 #include "mapgml.h"
 #include <ctype.h>
 #include "maptemplate.h"
 
 #include "mapogcsld.h"
 #include "mapogcfilter.h"
+#include "mapowscommon.h"
 
 #include "maptime.h"
 #include "mapproject.h"
@@ -71,7 +73,6 @@ int ogrEnabled = 0;
 int msWMSException(mapObj *map, int nVersion, const char *exception_code,
                    char *wms_exception_format)
 {
-  const char *encoding;
   char *schemalocation = NULL;
 
   /* Default to WMS 1.3.0 exceptions if version not set yet */
@@ -80,8 +81,6 @@ int msWMSException(mapObj *map, int nVersion, const char *exception_code,
 
   /* get scheam location */
   schemalocation = msEncodeHTMLEntities( msOWSGetSchemasLocation(map) );
-
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "MO", "encoding");
 
   /* Establish default exception format depending on VERSION */
   if (wms_exception_format == NULL) {
@@ -109,10 +108,7 @@ int msWMSException(mapObj *map, int nVersion, const char *exception_code,
     msWriteErrorImage(map, NULL, blank);
 
   } else if (strcasecmp(wms_exception_format, "WMS_XML") == 0) { /* Only in V1.0.0 */
-    if (encoding)
-      msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-    else
-      msIO_setHeader("Content-Type","text/xml");
+    msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
     msIO_sendHeaders();
 
     msIO_printf("<WMTException version=\"1.0.0\">\n");
@@ -123,68 +119,40 @@ int msWMSException(mapObj *map, int nVersion, const char *exception_code,
   {
     if (nVersion <= OWS_1_0_7) {
       /* In V1.0.1 to 1.0.7, the MIME type was text/xml */
-      if (encoding)
-        msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-      else
-        msIO_setHeader("Content-Type","text/xml");
+      msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
       msIO_sendHeaders();
 
-      msOWSPrintEncodeMetadata(stdout, &(map->web.metadata),
-                               "MO", "encoding", OWS_NOERR,
-                               "<?xml version='1.0' encoding=\"%s\" standalone=\"no\" ?>\n",
-                               "ISO-8859-1");
+      msIO_printf("<?xml version='1.0' encoding=\"UTF-8\" standalone=\"no\" ?>\n");
       msIO_printf("<!DOCTYPE ServiceExceptionReport SYSTEM \"http://www.digitalearth.gov/wmt/xml/exception_1_0_1.dtd\">\n");
 
       msIO_printf("<ServiceExceptionReport version=\"1.0.1\">\n");
     } else if (nVersion <= OWS_1_1_0) {
       /* In V1.1.0 and later, we have OGC-specific MIME types */
       /* we cannot return anything else than application/vnd.ogc.se_xml here. */
-      if (encoding)
-        msIO_setHeader("Content-Type","application/vnd.ogc.se_xml; charset=%s", encoding);
-      else
-        msIO_setHeader("Content-Type","application/vnd.ogc.se_xml");
+      msIO_setHeader("Content-Type","application/vnd.ogc.se_xml; charset=UTF-8");
       msIO_sendHeaders();
 
-      msOWSPrintEncodeMetadata(stdout, &(map->web.metadata),
-                               "MO", "encoding", OWS_NOERR,
-                               "<?xml version='1.0' encoding=\"%s\" standalone=\"no\" ?>\n",
-                               "ISO-8859-1");
-
+      msIO_printf("<?xml version='1.0' encoding=\"UTF-8\" standalone=\"no\" ?>\n");
 
       msIO_printf("<!DOCTYPE ServiceExceptionReport SYSTEM \"%s/wms/1.1.0/exception_1_1_0.dtd\">\n",schemalocation);
 
       msIO_printf("<ServiceExceptionReport version=\"1.1.0\">\n");
     } else if (nVersion <= OWS_1_1_1) { /* 1.1.1 */
-      if (encoding)
-        msIO_setHeader("Content-Type","application/vnd.ogc.se_xml; charset=%s", encoding);
-      else
-        msIO_setHeader("Content-Type","application/vnd.ogc.se_xml");
+      msIO_setHeader("Content-Type","application/vnd.ogc.se_xml; charset=UTF-8");
       msIO_sendHeaders();
 
-      msOWSPrintEncodeMetadata(stdout, &(map->web.metadata),
-                               "MO", "encoding", OWS_NOERR,
-                               "<?xml version='1.0' encoding=\"%s\" standalone=\"no\" ?>\n",
-                               "ISO-8859-1");
+      msIO_printf("<?xml version='1.0' encoding=\"UTF-8\" standalone=\"no\" ?>\n");
       msIO_printf("<!DOCTYPE ServiceExceptionReport SYSTEM \"%s/wms/1.1.1/exception_1_1_1.dtd\">\n", schemalocation);
       msIO_printf("<ServiceExceptionReport version=\"1.1.1\">\n");
     } else { /*1.3.0*/
       if (strcasecmp(wms_exception_format, "application/vnd.ogc.se_xml") == 0) {
-        if (encoding)
-          msIO_setHeader("Content-Type","application/vnd.ogc.se_xml; charset=%s", encoding);
-        else
-          msIO_setHeader("Content-Type","application/vnd.ogc.se_xml");
+        msIO_setHeader("Content-Type","application/vnd.ogc.se_xml; charset=UTF-8");
       } else {
-        if (encoding)
-          msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-        else
-          msIO_setHeader("Content-Type","text/xml");
+        msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
       }
       msIO_sendHeaders();
 
-      msOWSPrintEncodeMetadata(stdout, &(map->web.metadata),
-                               "MO", "encoding", OWS_NOERR,
-                               "<?xml version='1.0' encoding=\"%s\" standalone=\"no\" ?>\n",
-                               "ISO-8859-1");
+      msIO_printf("<?xml version='1.0' encoding=\"UTF-8\" standalone=\"no\" ?>\n");
       msIO_printf("<ServiceExceptionReport version=\"1.3.0\" xmlns=\"http://www.opengis.net/ogc\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.opengis.net/ogc %s/wms/1.3.0/exceptions_1_3_0.xsd\">\n",
                   schemalocation);
     }
@@ -249,9 +217,8 @@ int msWMSSetTimePattern(const char *timepatternstring, char *timestring, int che
       }
 
       msFreeCharArray(patterns, numpatterns);
-      msFreeCharArray(atimes, numtimes);              
-
     }
+    msFreeCharArray(atimes, numtimes);              
   }
 
   return ret;
@@ -412,17 +379,16 @@ void msWMSPrepareNestedGroups(mapObj* map, int nVersion, char*** nestedGroups, i
 int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int forcecharcter)
 {
   char **extents=NULL, **ranges=NULL, **onerange=NULL;
-  int numextents;
+  int numextents, numranges, numonerange;
   char **aextentvalues = NULL;
   int nextentvalues=0;
   pointObj *aextentranges=NULL;
   int nextentranges=0;
 
   int isextentavalue = MS_FALSE, isextentarange=MS_FALSE;
-  int i,j, ntmp;
+  int i,j,status=MS_FALSE;
   char **uservalues=NULL;
   int numuservalues=0;
-  char *stmp = NULL;
   int ischaracter = MS_FALSE;
   float minval, maxval,currentval,mincurrentval,maxcurrentval, mincurrentrange, maxcurrentrange;
 
@@ -455,9 +421,8 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
         ischaracter= !FLTIsNumeric((char *)dimensionextent);
 
     } else {
-      ntmp = -1;
-      ranges = msStringSplit (dimensionextent, '/', &ntmp);
-      if(ranges && (ntmp == 2 || ntmp == 3)) {
+      ranges = msStringSplit (dimensionextent, '/', &numranges);
+      if(ranges && (numranges == 2 || numranges == 3)) {
         /*single range*/
         isextentarange = MS_TRUE;
         aextentranges = msSmallMalloc(sizeof(pointObj));
@@ -467,10 +432,8 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
         /*ranges should be numeric*/
         ischaracter = MS_FALSE;
       }
-      if (ranges && ntmp > 0) {
-        msFreeCharArray(ranges, ntmp);
-        ranges = NULL;
-      }
+      msFreeCharArray(ranges, numranges);
+      ranges = NULL;
     }
   } else if (numextents > 1) { /*check if it is muliple values or mutliple ranges*/
     if (strstr(dimensionextent, "/") == NULL) {
@@ -478,10 +441,9 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
       isextentavalue = MS_TRUE;
       aextentvalues = (char **)msSmallMalloc(sizeof(char *)*numextents);
       for (i=0; i<numextents; i++) {
-        stmp = msStrdup(extents[i]);
+        char *stmp = msStrdup(extents[i]);
         msStringTrim(stmp);
-        aextentvalues[i] = msStrdup(stmp);
-        msFree(stmp);
+        aextentvalues[i] = stmp;
       }
       nextentvalues = numextents;
       if (!forcecharcter)
@@ -495,8 +457,8 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
       nextentranges=0;
 
       for (i=0; i<numextents; i++) {
-        onerange = msStringSplit(extents[i], '/', &ntmp);
-        if (!onerange || (ntmp != 2 && ntmp != 3)) {
+        onerange = msStringSplit(extents[i], '/', &numonerange);
+        if (!onerange || (numonerange != 2 && numonerange != 3)) {
           isvalidextent = MS_FALSE;
           break;
         }
@@ -505,13 +467,12 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
           aextentranges[nextentranges].x = atof(onerange[0]);
           aextentranges[nextentranges++].y = atof(onerange[1]);
         }
-        if (onerange && ntmp > 0 ) {
-          msFreeCharArray(onerange, ntmp);
-          onerange = NULL;
-        }
+        msFreeCharArray(onerange, numonerange);
+        onerange = NULL;
       }
       if (!isvalidextent) {
         msFree(aextentranges);
+        aextentranges = NULL;
         nextentranges = 0;
         isextentarange = MS_FALSE;
       }
@@ -528,7 +489,8 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
 
   /* make sure that we got a valid extent*/
   if (!isextentavalue && !isextentarange) {
-    return MS_FALSE;
+    status = MS_FALSE;
+    goto dimension_cleanup;
   }
 
   /*for the extent of the dimesion, we support
@@ -541,8 +503,8 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
   if (numuservalues == 1) {
     /*user iput=single*/
     /*is it descret or range*/
-    ranges = msStringSplit(uservalues[0], '/', &ntmp);
-    if (ntmp == 1) { /*discrete*/
+    ranges = msStringSplit(uservalues[0], '/', &numranges);
+    if (numranges == 1) { /*discrete*/
       if (isextentavalue) {
         /*single user value, single/multiple values extent*/
         for (i=0; i<nextentvalues; i++) {
@@ -568,7 +530,7 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
           }
         }
       }
-    } else if (ntmp == 2 || ntmp == 3) { /*range*/
+    } else if (numranges == 2 || numranges == 3) { /*range*/
       /*user input=single range. In this case the extents must
        be of a range type.*/
       mincurrentval = atof(ranges[0]);
@@ -586,8 +548,8 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
         }
       }
     }
-    if (ranges && ntmp > 0)
-      msFreeCharArray(ranges, ntmp);
+    msFreeCharArray(ranges, numranges);
+    ranges = NULL;
   } else if (numuservalues > 1) { /*user input=multiple*/
     if (strstr(value, "/") == NULL) {
       /*user input=multiple value*/
@@ -634,8 +596,8 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
 
       for (i=0; i<numuservalues; i++) {
         /*each ranges should be valid*/
-        onerange = msStringSplit(uservalues[i], '/', &ntmp);
-        if (ntmp == 2 || ntmp == 3) {
+        onerange = msStringSplit(uservalues[i], '/', &numonerange);
+        if (numonerange == 2 || numonerange == 3) {
           mincurrentval = atof(onerange[0]);
           maxcurrentval = atof(onerange[1]);
 
@@ -653,36 +615,45 @@ int msWMSValidateDimensionValue(char *value, const char *dimensionextent, int fo
             }
             if (j == nextentranges) {
               valueisvalid = MS_FALSE;
-              msFreeCharArray(onerange, ntmp);
+              msFreeCharArray(onerange, numonerange);
+              onerange = NULL;
               break;
             }
           }
         } else {
           valueisvalid = MS_FALSE;
         }
-        msFreeCharArray(onerange, ntmp);
+        msFreeCharArray(onerange, numonerange);
+        onerange = NULL;
       }
       uservaluevalid = valueisvalid;
     }
 
   }
-  if(uservalues && numuservalues > 0)
+  if(uservaluevalid)
+    status = MS_TRUE;
+
+dimension_cleanup:
+  if(ranges)
+    msFreeCharArray(ranges, numranges);
+  if(onerange)
+    msFreeCharArray(onerange, numonerange);
+  if(extents)
+    msFreeCharArray(extents, numextents);
+  if(uservalues)
     msFreeCharArray(uservalues, numuservalues);
 
-  if (aextentvalues && nextentvalues > 0) {
+  if (aextentvalues) {
     for (i=0; i<nextentvalues; i++)
       msFree(aextentvalues[i]);
     msFree(aextentvalues);
   }
 
-  if(aextentranges && nextentranges > 0) {
+  if(aextentranges) {
     msFree(aextentranges);
   }
 
-  if(uservaluevalid)
-    return MS_TRUE;
-
-  return MS_FALSE;
+  return status;
 }
 
 
@@ -766,7 +737,7 @@ int msWMSApplyDimension(layerObj *lp, int version, char *dimensionname, char *va
       }
     } else
       msSetError(MS_WMSERR, "Dimension %s : invalid settings. Make sure that item, units and extent are set.", "msWMSApplyDimension",
-                 dimension, currentvalue);
+                 dimension);
 
     msFree(dimensionitemname);
     msFree(dimensionextentname);
@@ -789,6 +760,7 @@ int msWMSLoadGetMapParams(mapObj *map, int nVersion,
   int iUnits = -1;
   int nLayerOrder = 0;
   int transparent = MS_NOOVERRIDE;
+  int bbox_pixel_is_point = MS_FALSE;
   outputFormatObj *format = NULL;
   int validlayers = 0;
   char *styles = NULL;
@@ -1089,6 +1061,7 @@ int msWMSLoadGetMapParams(mapObj *map, int nVersion,
               (strncasecmp(format->driver, "GD/", 3) != 0 &&
                strncasecmp(format->driver, "GDAL/", 5) != 0 &&
                strncasecmp(format->driver, "AGG/", 4) != 0 &&
+               strncasecmp(format->driver, "UTFGRID", 7) != 0 &&
                strncasecmp(format->driver, "CAIRO/", 6) != 0 &&
                strncasecmp(format->driver, "OGL/", 4) != 0 &&
                strncasecmp(format->driver, "KML", 3) != 0 &&
@@ -1124,6 +1097,10 @@ int msWMSLoadGetMapParams(mapObj *map, int nVersion,
      */
     else if (strcasecmp(names[i], "ANGLE") == 0) {
       msMapSetRotation(map, atof(values[i]));
+    }
+    /* Vendor-specific bbox_pixel_is_point, added in ticket #4652 */
+    else if (strcasecmp(names[i], "BBOX_PIXEL_IS_POINT") == 0) {
+      bbox_pixel_is_point = (strcasecmp(values[i], "TRUE") == 0);
     }
   }
 
@@ -1401,7 +1378,7 @@ this request. Check wms/ows_enable_request settings.",
   ** have a projection. This will prevent problems when users forget to
   ** explicitly set a projection on all layers in a WMS mapfile.
   */
-  if ((srsbuffer != NULL && strlen(srsbuffer) > 1) || nonsquare_enabled) {
+  if (strlen(srsbuffer) > 1 || nonsquare_enabled) {
     projectionObj newProj;
 
     if (map->projection.numargs <= 0) {
@@ -1421,7 +1398,7 @@ this request. Check wms/ows_enable_request settings.",
     }
 
     msInitProjection(&newProj);
-    if (srsbuffer != NULL && strlen(srsbuffer) > 1) {
+    if (strlen(srsbuffer) > 1) {
       int nTmp;
 
       if (nVersion >= OWS_1_3_0)
@@ -1436,36 +1413,14 @@ this request. Check wms/ows_enable_request settings.",
 
     if (nonsquare_enabled ||
         msProjectionsDiffer(&(map->projection), &newProj)) {
-      char *original_srs = NULL;
-
-      for(i=0; i<map->numlayers; i++) {
-        if (GET_LAYER(map, i)->projection.numargs <= 0 &&
-            GET_LAYER(map, i)->status != MS_OFF &&
-            GET_LAYER(map, i)->transform == MS_TRUE) {
-          /* This layer is turned on and needs a projection */
-
-          /* Fetch main map projection string only now that we need it */
-          if (original_srs == NULL)
-            original_srs = msGetProjectionString(&(map->projection));
-
-          if (msLoadProjectionString(&(GET_LAYER(map, i)->projection),
-                                     original_srs) != 0) {
-            msFreeProjection(&newProj);
-            return msWMSException(map, nVersion, NULL, wms_exception_format);
-          }
-          GET_LAYER(map, i)->project = MS_TRUE;
-        }
-      }
-
-      msFree(original_srs);
+      msMapSetLayerProjections(map);
     }
-
     msFreeProjection(&newProj);
   }
 
   /* apply the srs to the map file. This is only done after validating */
   /* that the srs given as parameter is valid for all layers */
-  if (srsbuffer != NULL && strlen(srsbuffer) > 1) {
+  if (strlen(srsbuffer) > 1) {
     int nTmp;
     msFreeProjection(&map->projection);
     msInitProjection(&map->projection);
@@ -1681,7 +1636,7 @@ this request. Check wms/ows_enable_request settings.",
   ** in by half a pixel.  We wait till here because we want to ensure we
   ** are doing this in terms of the correct WIDTH and HEIGHT.
   */
-  if( adjust_extent && map->width>1 && map->height>1 ) {
+  if( adjust_extent && map->width>1 && map->height>1 && !bbox_pixel_is_point) {
     double  dx, dy;
 
     dx = (map->extent.maxx - map->extent.minx) / map->width;
@@ -2254,8 +2209,8 @@ int msDumpLayer(mapObj *map, layerObj *lp, int nVersion, const char *script_url_
         msFree(pszDimensionDefaultName);
 
       }
-      msFreeCharArray(tokens, ntokens);
     }
+    msFreeCharArray(tokens, ntokens);
   }
 
 
@@ -2406,7 +2361,7 @@ int msDumpLayer(mapObj *map, layerObj *lp, int nVersion, const char *script_url_
             }
             group_layers =(int *)msSmallRealloc(group_layers, sizeof(int)*num_layers);
             
-            if (msLegendCalcSize(map, 1, &size_x, &size_y,  group_layers, num_layers) == MS_SUCCESS) {
+            if (msLegendCalcSize(map, 1, &size_x, &size_y,  group_layers, num_layers, NULL, 1) == MS_SUCCESS) {
               const char *styleName = NULL;
               char *pszEncodedStyleName = NULL;
               layerObj *lp2 = NULL;
@@ -2417,15 +2372,11 @@ int msDumpLayer(mapObj *map, layerObj *lp, int nVersion, const char *script_url_
               bufferSize = strlen(script_url_encoded)+300;
               legendurl = (char*)msSmallMalloc(bufferSize);
 
-#if defined USE_GD_PNG || defined USE_PNG
+#if defined USE_PNG
               mimetype = msEncodeHTMLEntities("image/png");
 #endif
-#if defined USE_GD_GIF
-              if (!mimetype)
-                mimetype = msEncodeHTMLEntities("image/gif");
-#endif
 
-#if defined USE_GD_JPEG || defined USE_JPEG
+#if defined USE_JPEG
               if (!mimetype)
                 mimetype = msEncodeHTMLEntities("image/jpeg");
 #endif
@@ -2699,7 +2650,6 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
   char *schemalocation = NULL;
   const char *updatesequence=NULL;
   const char *sldenabled=NULL;
-  const char *encoding;
   const char *layerlimit=NULL;
   char *pszTmp=NULL;
   int i;
@@ -2711,8 +2661,6 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
   updatesequence = msOWSLookupMetadata(&(map->web.metadata), "MO", "updatesequence");
 
   sldenabled = msOWSLookupMetadata(&(map->web.metadata), "MO", "sld_enabled");
-
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "MO", "encoding");
 
   if (sldenabled == NULL)
     sldenabled = "true";
@@ -2764,11 +2712,7 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
   validated_language = msOWSGetLanguageFromList(map, "MO", requested_language);
 
   if (validated_language != NULL) {
-    for(i=0; i<map->numlayers; i++) {
-      layerObj *layer = GET_LAYER(map, i);
-      if(layer->data) layer->data = msCaseReplaceSubstring(layer->data, "%language%", validated_language);
-      if(layer->connection) layer->connection = msCaseReplaceSubstring(layer->connection, "%language%", validated_language);
-    }
+    msMapSetLanguageSpecificConnection(map, validated_language);
   }
 
   /* We need this server's onlineresource. */
@@ -2778,25 +2722,18 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
   if ((script_url=msOWSGetOnlineResource2(map, "MO", "onlineresource", req, validated_language)) == NULL ||
       (script_url_encoded = msEncodeHTMLEntities(script_url)) == NULL) {
     msFree(validated_language);
+    msFree(schemalocation);
+    msFree(dtd_url);
     return msWMSException(map, nVersion, NULL, wms_exception_format);
   }
 
   if (nVersion <= OWS_1_0_7 || nVersion >= OWS_1_3_0)   /* 1.0.0 to 1.0.7 and >=1.3.0*/
-    if (encoding)
-      msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-    else
-      msIO_setHeader("Content-Type","text/xml");
+    msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
   else /* 1.1.0 and later */
-    if (encoding)
-      msIO_setHeader("Content-Type","application/vnd.ogc.wms_xml; charset=%s", encoding);
-    else
-      msIO_setHeader("Content-Type","application/vnd.ogc.wms_xml");
+    msIO_setHeader("Content-Type","application/vnd.ogc.wms_xml; charset=UTF-8");
   msIO_sendHeaders();
 
-  msOWSPrintEncodeMetadata(stdout, &(map->web.metadata),
-                           "MO", "encoding", OWS_NOERR,
-                           "<?xml version='1.0' encoding=\"%s\" standalone=\"no\" ?>\n",
-                           "ISO-8859-1");
+  msIO_printf("<?xml version='1.0' encoding=\"UTF-8\" standalone=\"no\" ?>\n");
 
   /*TODO review wms1.3.0*/
   if ( nVersion < OWS_1_3_0) {
@@ -2835,8 +2772,8 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
                 "   xmlns:ms=\"http://mapserver.gis.umn.edu/mapserver\"");
 
     if ( msOWSLookupMetadata(&(map->web.metadata), "MO", "inspire_capabilities") ) {
-      msIO_printf("   xmlns:inspire_common=\"http://inspire.ec.europa.eu/schemas/common/1.0\""
-                  "   xmlns:inspire_vs=\"http://inspire.ec.europa.eu/schemas/inspire_vs/1.0\"" );
+      msIO_printf("   xmlns:" MS_INSPIRE_COMMON_NAMESPACE_PREFIX "=\"" MS_INSPIRE_COMMON_NAMESPACE_URI "\""
+                  "   xmlns:" MS_INSPIRE_VS_NAMESPACE_PREFIX "=\"" MS_INSPIRE_VS_NAMESPACE_URI "\"" );
     }
 
     msIO_printf("   xsi:schemaLocation=\"http://www.opengis.net/wms %s/wms/%s/capabilities_1_3_0.xsd "
@@ -2844,8 +2781,10 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
                 msOWSGetSchemasLocation(map), msOWSGetVersionString(nVersion, szVersionBuf), msOWSGetSchemasLocation(map));
 
     if ( msOWSLookupMetadata(&(map->web.metadata), "MO", "inspire_capabilities") ) {
-      msIO_printf(" http://inspire.ec.europa.eu/schemas/inspire_vs/1.0 "
-                  " http://inspire.ec.europa.eu/schemas/inspire_vs/1.0/inspire_vs.xsd");
+      char* inspireschemalocation = msEncodeHTMLEntities( msOWSGetInspireSchemasLocation(map) );
+      msIO_printf(" " MS_INSPIRE_VS_NAMESPACE_URI " "
+                  " %s%s", inspireschemalocation, MS_INSPIRE_VS_SCHEMA_LOCATION);
+      free(inspireschemalocation);
     }
 
     msIO_printf(" http://mapserver.gis.umn.edu/mapserver %sservice=WMS&amp;version=1.3.0&amp;request=GetSchemaExtension\"",
@@ -2925,13 +2864,10 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
     if (msOWSRequestIsEnabled(map, NULL, "M", "GetMap", MS_FALSE))
       msWMSPrintRequestCap(nVersion, "Map", script_url_encoded, ""
 
-#ifdef USE_GD_GIF
-                           "<GIF />"
-#endif
-#if defined USE_GD_PNG || defined USE_PNG
+#if defined USE_PNG
                            "<PNG />"
 #endif
-#if defined USE_GD_JPEG || defined USE_JPEG
+#if defined USE_JPEG
                            "<JPEG />"
 #endif
                            "<SVG />"
@@ -3093,7 +3029,7 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
     /* INSPIRE extended capabilities for WMS 1.1.1 */
     if (nVersion == OWS_1_1_1 && msOWSLookupMetadata(&(map->web.metadata), "MO", "inspire_capabilities") ) {
       msIO_printf("  <VendorSpecificCapabilities>\n");
-      msOWSPrintInspireCommonExtendedCapabilities(stdout, map, "MO", OWS_WARN, "inspire_vs:ExtendedCapabilities", validated_language, OWS_WMS);
+      msOWSPrintInspireCommonExtendedCapabilities(stdout, map, "MO", OWS_WARN, "inspire_vs:ExtendedCapabilities", NULL, validated_language, OWS_WMS);
       msIO_printf("  </VendorSpecificCapabilities>\n");
     } else {
       msIO_printf("  <VendorSpecificCapabilities />\n"); /* nothing yet */
@@ -3112,7 +3048,7 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
 
   /* INSPIRE extended capabilities for WMS 1.3.0 */
   if (nVersion >= OWS_1_3_0 && msOWSLookupMetadata(&(map->web.metadata), "MO", "inspire_capabilities") ) {
-    msOWSPrintInspireCommonExtendedCapabilities(stdout, map, "MO", OWS_WARN, "inspire_vs:ExtendedCapabilities", validated_language, OWS_WMS);
+    msOWSPrintInspireCommonExtendedCapabilities(stdout, map, "MO", OWS_WARN, "inspire_vs:ExtendedCapabilities", NULL, validated_language, OWS_WMS);
   }
 
   /* Top-level layer with map extents and SRS, encloses all map layers */
@@ -3281,7 +3217,7 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
           char width[10], height[10];
 
           group_layers =(int *)msSmallRealloc(group_layers, sizeof(int)*num_layers);
-          if (msLegendCalcSize(map, 1, &size_x, &size_y,  group_layers , num_layers) == MS_SUCCESS) {
+          if (msLegendCalcSize(map, 1, &size_x, &size_y,  group_layers , num_layers, NULL, 1) == MS_SUCCESS) {
             bufferSize = strlen(script_url_encoded)+300;
             pszLegendURL = (char*)msSmallMalloc(bufferSize);
             snprintf(width, sizeof(width), "%d", size_x);
@@ -3348,7 +3284,7 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
 
       /* We'll use this array of booleans to track which layer/group have been */
       /* processed already */
-      pabLayerProcessed = (char *)msSmallCalloc(map->numlayers, sizeof(char*));
+      pabLayerProcessed = (char *)msSmallCalloc(map->numlayers, sizeof(char));
 
       /* Mark disabled layers as processed to prevent from being displayed in nested groups (#4533)*/
       for(i=0; i<map->numlayers; i++) {
@@ -3458,7 +3394,7 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
                   char width[10], height[10];
 
                   group_layers =(int *)msSmallRealloc(group_layers,  sizeof(int)*num_layers);
-                  if (msLegendCalcSize(map, 1, &size_x, &size_y,  group_layers , num_layers) == MS_SUCCESS) {
+                  if (msLegendCalcSize(map, 1, &size_x, &size_y,  group_layers , num_layers, NULL, 1) == MS_SUCCESS) {
                     bufferSize = strlen(script_url_encoded)+300;
                     pszLegendURL = (char*)msSmallMalloc(bufferSize);
                     snprintf(width, sizeof(width), "%d", size_x);
@@ -3558,69 +3494,75 @@ int msWMSGetCapabilities(mapObj *map, int nVersion, cgiRequestObj *req, owsReque
  * This function look for params that can be used
  * by mapserv when generating template.
 */
-int msTranslateWMS2Mapserv(char **names, char **values, int *numentries)
+int msTranslateWMS2Mapserv(const char **names, const char **values, int numentries, char ***translated_names, char ***translated_values, int *translated_numentries)
 {
-  int i=0;
-  int tmpNumentries = *numentries;;
-
-  for (i=0; i<*numentries; i++) {
+  int i=0, num_allocated = numentries;
+  *translated_names = (char**)msSmallMalloc(num_allocated * sizeof(char*));
+  *translated_values = (char**)msSmallMalloc(num_allocated * sizeof(char*));
+  *translated_numentries = 0;
+  for (i=0; i<numentries; i++) {
+    (*translated_values)[*translated_numentries] = msStrdup(values[i]);
+    (*translated_names)[*translated_numentries] = msStrdup(names[i]);
+    (*translated_numentries)++;
     if (strcasecmp("X", names[i]) == 0) {
-      values[tmpNumentries] = msStrdup(values[i]);
-      names[tmpNumentries] = msStrdup("img.x");
-
-      tmpNumentries++;
+      num_allocated++;
+      *translated_names = (char**)msSmallRealloc(*translated_names, num_allocated * sizeof(char*));
+      *translated_values = (char**)msSmallRealloc(*translated_values, num_allocated * sizeof(char*));
+      (*translated_values)[*translated_numentries] = msStrdup(values[i]);
+      (*translated_names)[*translated_numentries] = msStrdup("img.x");
+      (*translated_numentries)++;
     } else if (strcasecmp("Y", names[i]) == 0) {
-      values[tmpNumentries] = msStrdup(values[i]);
-      names[tmpNumentries] = msStrdup("img.y");
-
-      tmpNumentries++;
+      num_allocated++;
+      *translated_names = (char**)msSmallRealloc(*translated_names, num_allocated * sizeof(char*));
+      *translated_values = (char**)msSmallRealloc(*translated_values, num_allocated * sizeof(char*));
+      (*translated_values)[*translated_numentries] = msStrdup(values[i]);
+      (*translated_names)[*translated_numentries] = msStrdup("img.y");
+      (*translated_numentries)++;
     } else if (strcasecmp("LAYERS", names[i]) == 0) {
       char **layers;
       int tok;
       int j;
-
       layers = msStringSplit(values[i], ',', &tok);
-
+      num_allocated += tok;
+      *translated_names = (char**)msSmallRealloc(*translated_names, num_allocated * sizeof(char*));
+      *translated_values = (char**)msSmallRealloc(*translated_values, num_allocated * sizeof(char*));
       for (j=0; j<tok; j++) {
-        values[tmpNumentries] = layers[j];
+        (*translated_values)[*translated_numentries] = layers[j];
+        (*translated_names)[*translated_numentries] = msStrdup("layer");
+        (*translated_numentries)++;
         layers[j] = NULL;
-        names[tmpNumentries] = msStrdup("layer");
-
-        tmpNumentries++;
       }
-
       free(layers);
     } else if (strcasecmp("QUERY_LAYERS", names[i]) == 0) {
       char **layers;
       int tok;
       int j;
-
       layers = msStringSplit(values[i], ',', &tok);
-
+      num_allocated += tok;
+      *translated_names = (char**)msSmallRealloc(*translated_names, num_allocated * sizeof(char*));
+      *translated_values = (char**)msSmallRealloc(*translated_values, num_allocated * sizeof(char*));
       for (j=0; j<tok; j++) {
-        values[tmpNumentries] = layers[j];
+        (*translated_values)[*translated_numentries] = layers[j];
+        (*translated_names)[*translated_numentries] = msStrdup("qlayer");
+        (*translated_numentries)++;
         layers[j] = NULL;
-        names[tmpNumentries] = msStrdup("qlayer");
-
-        tmpNumentries++;
       }
-
       free(layers);
     } else if (strcasecmp("BBOX", names[i]) == 0) {
       char *imgext;
+      num_allocated++;
+      *translated_names = (char**)msSmallRealloc(*translated_names, num_allocated * sizeof(char*));
+      *translated_values = (char**)msSmallRealloc(*translated_values, num_allocated * sizeof(char*));
 
       /* Note msReplaceSubstring() works on the string itself, so we need to make a copy */
       imgext = msStrdup(values[i]);
       imgext = msReplaceSubstring(imgext, ",", " ");
-
-      values[tmpNumentries] = imgext;
-      names[tmpNumentries] = msStrdup("imgext");
-
-      tmpNumentries++;
+      (*translated_values)[*translated_numentries] = imgext;
+      (*translated_names)[*translated_numentries] = msStrdup("imgext");
+      (*translated_numentries)++;
     }
   }
 
-  *numentries = tmpNumentries;
 
   return MS_SUCCESS;
 }
@@ -3689,7 +3631,6 @@ int msWMSGetMap(mapObj *map, int nVersion, char **names, char **values, int nume
           (GET_LAYER(map, i)->type == MS_LAYER_POINT ||
            GET_LAYER(map, i)->type == MS_LAYER_LINE ||
            GET_LAYER(map, i)->type == MS_LAYER_POLYGON ||
-           GET_LAYER(map, i)->type == MS_LAYER_ANNOTATION ||
            GET_LAYER(map, i)->type == MS_LAYER_TILEINDEX))
 
       {
@@ -3716,7 +3657,11 @@ int msWMSGetMap(mapObj *map, int nVersion, char **names, char **values, int nume
   }
 
   if (strcasecmp(map->imagetype, "application/openlayers")!=0) {
-    msIO_setHeader("Content-Type",MS_IMAGE_MIME_TYPE(map->outputformat));
+    if(!strcmp(MS_IMAGE_MIME_TYPE(map->outputformat), "application/json")) {
+      msIO_setHeader("Content-Type","application/json; charset=utf-8");
+    } else {
+      msIO_setHeader("Content-Type", "%s", MS_IMAGE_MIME_TYPE(map->outputformat));
+    }
     msIO_sendHeaders();
     if (msSaveImage(map, img, NULL) != MS_SUCCESS) {
       msFreeImage(img);
@@ -3854,7 +3799,6 @@ int msWMSFeatureInfo(mapObj *map, int nVersion, char **names, char **values, int
   double cellx, celly;
   errorObj *ms_error = msGetErrorObj();
   int query_status=MS_NOERR;
-  const char *encoding;
   int query_layer = 0;
   const char *format_list=NULL;
   int valid_format=MS_FALSE;
@@ -3867,14 +3811,12 @@ int msWMSFeatureInfo(mapObj *map, int nVersion, char **names, char **values, int
   int *numNestedGroups = NULL;
   int *isUsedInNestedGroup = NULL;
 
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "MO", "encoding");
-
   nestedGroups = (char***)msSmallCalloc(map->numlayers, sizeof(char**));
   numNestedGroups = (int*)msSmallCalloc(map->numlayers, sizeof(int));
   isUsedInNestedGroup = (int*)msSmallCalloc(map->numlayers, sizeof(int));
   msWMSPrepareNestedGroups(map, nVersion, nestedGroups, numNestedGroups, isUsedInNestedGroup);
 
-  for(i=0; map && i<numentries; i++) {
+  for(i=0; i<numentries; i++) {
     if(strcasecmp(names[i], "QUERY_LAYERS") == 0) {
       char **layers;
       int numlayers, j, k;
@@ -4090,10 +4032,7 @@ int msWMSFeatureInfo(mapObj *map, int nVersion, char **names, char **values, int
     /* MIME response... we're free to use any valid MIME type */
     int numresults = 0;
 
-    if (encoding)
-      msIO_setHeader("Content-Type","text/plain; charset=%s", encoding);
-    else
-      msIO_setHeader("Content-Type","text/plain");
+    msIO_setHeader("Content-Type","text/plain; charset=UTF-8");
     msIO_sendHeaders();
     msIO_printf("GetFeatureInfo results:\n");
 
@@ -4105,33 +4044,29 @@ int msWMSFeatureInfo(mapObj *map, int nVersion, char **names, char **values, int
              strcasecmp(info_format, "application/vnd.ogc.gml") == 0) {
 
     if (nVersion <= OWS_1_0_7)   /* 1.0.0 to 1.0.7 */
-      if (encoding)
-        msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-      else
-        msIO_setHeader("Content-Type","text/xml");
+      msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
     else /* 1.1.0 and later */
-      if (encoding)
-        msIO_setHeader("Content-Type","application/vnd.ogc.gml; charset=%s", encoding);
-      else
-        msIO_setHeader("Content-Type","application/vnd.ogc.gml");
+      msIO_setHeader("Content-Type","application/vnd.ogc.gml; charset=UTF-8");
     msIO_sendHeaders();
     msGMLWriteQuery(map, NULL, "MGO"); /* default is stdout */
 
   } else {
     mapservObj *msObj;
 
+    char **translated_names, **translated_values;
+    int translated_numentries;
     msObj = msAllocMapServObj();
 
     /* Translate some vars from WMS to mapserv */
-    msTranslateWMS2Mapserv(names, values, &numentries);
+    msTranslateWMS2Mapserv((const char**)names, (const char**)values, numentries, &translated_names, &translated_values, &translated_numentries);
 
     msObj->map = map;
     msFreeCharArray(msObj->request->ParamNames, msObj->request->NumParams);
     msFreeCharArray(msObj->request->ParamValues, msObj->request->NumParams);
-    msObj->request->ParamNames = names;
-    msObj->request->ParamValues = values;
+    msObj->request->ParamNames = translated_names;
+    msObj->request->ParamValues = translated_values;
     msObj->Mode = QUERY;
-    msObj->request->NumParams = numentries;
+    msObj->request->NumParams = translated_numentries;
     msObj->mappnt.x = point.x;
     msObj->mappnt.y = point.y;
 
@@ -4141,12 +4076,9 @@ int msWMSFeatureInfo(mapObj *map, int nVersion, char **names, char **values, int
     } else if (msReturnTemplateQuery(msObj, (char *)info_format, NULL) != MS_SUCCESS)
       return msWMSException(map, nVersion, NULL, wms_exception_format);
 
-    /* We don't want to free the map, and param names/values since they */
-    /* belong to the caller, set them to NULL before freeing the mapservObj */
+    /* We don't want to free the map since it */
+    /* belongs to the caller, set it to NULL before freeing the mapservObj */
     msObj->map = NULL;
-    msObj->request->ParamNames = NULL;
-    msObj->request->ParamValues = NULL;
-    msObj->request->NumParams = 0;
 
     msFreeMapServObj(msObj);
   }
@@ -4171,15 +4103,13 @@ int msWMSDescribeLayer(mapObj *map, int nVersion, char **names,
   char *schemalocation = NULL;
   char *version = NULL;
   char *sld_version = NULL;
-  const char *encoding;
   char ***nestedGroups = NULL;
   int *numNestedGroups = NULL;
   int *isUsedInNestedGroup = NULL;
 
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "MO", "encoding");
-
   for(i=0; map && i<numentries; i++) {
     if(strcasecmp(names[i], "LAYERS") == 0) {
+      if(layers) msFreeCharArray(layers, numlayers); /* free previous occurence of layers array if more than one was provided */
       layers = msStringSplit(values[i], ',', &numlayers);
     }
     if(strcasecmp(names[i], "VERSION") == 0) {
@@ -4199,16 +4129,10 @@ int msWMSDescribeLayer(mapObj *map, int nVersion, char **names,
     return msWMSException(map, nVersion, "InvalidParameterValue", wms_exception_format);
   }
 
-  if (encoding)
-    msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-  else
-    msIO_setHeader("Content-Type","text/xml");
+  msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
   msIO_sendHeaders();
 
-  msOWSPrintEncodeMetadata(stdout, &(map->web.metadata),
-                           "MO", "encoding", OWS_NOERR,
-                           "<?xml version='1.0' encoding=\"%s\"?>\n",
-                           "ISO-8859-1");
+  msIO_printf("<?xml version='1.0' encoding=\"UTF-8\"?>\n");
 
   schemalocation = msEncodeHTMLEntities(msOWSGetSchemasLocation(map));
   if (nVersion < OWS_1_3_0) {
@@ -4364,7 +4288,8 @@ int msWMSDescribeLayer(mapObj *map, int nVersion, char **names,
 ** msWMSGetLegendGraphic()
 */
 int msWMSLegendGraphic(mapObj *map, int nVersion, char **names,
-                       char **values, int numentries, char *wms_exception_format, owsRequestObj *ows_request)
+                       char **values, int numentries, char *wms_exception_format, owsRequestObj *ows_request,
+                       map_hittest *hittest)
 {
   char *pszLayer = NULL;
   char *pszFormat = NULL;
@@ -4386,197 +4311,210 @@ int msWMSLegendGraphic(mapObj *map, int nVersion, char **names,
   int *numNestedGroups = NULL;
   int *isUsedInNestedGroup = NULL;
 
-  sldenabled = msOWSLookupMetadata(&(map->web.metadata), "MO", "sld_enabled");
+  if(!hittest) {
+    /* we can skip alot of testing if we already have a hittest, as it has already been done in the hittesting phase */
 
-  if (sldenabled == NULL)
-    sldenabled = "true";
 
-  for(i=0; map && i<numentries; i++) {
-    if (strcasecmp(names[i], "LAYER") == 0) {
-      pszLayer = values[i];
-    } else if (strcasecmp(names[i], "WIDTH") == 0)
-      nWidth = atoi(values[i]);
-    else if (strcasecmp(names[i], "HEIGHT") == 0)
-      nHeight = atoi(values[i]);
-    else if (strcasecmp(names[i], "FORMAT") == 0)
-      pszFormat = values[i];
-    else if (strcasecmp(names[i], "SCALE") == 0)
-      psScale = values[i];
+    sldenabled = msOWSLookupMetadata(&(map->web.metadata), "MO", "sld_enabled");
+
+    if (sldenabled == NULL)
+      sldenabled = "true";
+
+    for(i=0; map && i<numentries; i++) {
+      if (strcasecmp(names[i], "LAYER") == 0) {
+        pszLayer = values[i];
+      } else if (strcasecmp(names[i], "WIDTH") == 0)
+        nWidth = atoi(values[i]);
+      else if (strcasecmp(names[i], "HEIGHT") == 0)
+        nHeight = atoi(values[i]);
+      else if (strcasecmp(names[i], "FORMAT") == 0)
+        pszFormat = values[i];
+      else if (strcasecmp(names[i], "SCALE") == 0)
+        psScale = values[i];
 #ifdef USE_OGR
-    /* -------------------------------------------------------------------- */
-    /*      SLD support :                                                   */
-    /*        - check if the SLD parameter is there. it is supposed to      */
-    /*      refer a valid URL containing an SLD document.                   */
-    /*        - check the SLD_BODY parameter that should contain the SLD    */
-    /*      xml string.                                                     */
-    /* -------------------------------------------------------------------- */
-    else if (strcasecmp(names[i], "SLD") == 0 &&
-             values[i] && strlen(values[i]) > 0 && strcasecmp(sldenabled, "true") == 0)
-      msSLDApplySLDURL(map, values[i], -1, NULL, NULL);
-    else if (strcasecmp(names[i], "SLD_BODY") == 0 &&
-             values[i] && strlen(values[i]) > 0 && strcasecmp(sldenabled, "true") == 0)
-      msSLDApplySLD(map, values[i], -1, NULL, NULL);
-    else if (strcasecmp(names[i], "RULE") == 0)
-      psRule = values[i];
-    else if (strcasecmp(names[i], "STYLE") == 0)
-      pszStyle = values[i];
+      /* -------------------------------------------------------------------- */
+      /*      SLD support :                                                   */
+      /*        - check if the SLD parameter is there. it is supposed to      */
+      /*      refer a valid URL containing an SLD document.                   */
+      /*        - check the SLD_BODY parameter that should contain the SLD    */
+      /*      xml string.                                                     */
+      /* -------------------------------------------------------------------- */
+      else if (strcasecmp(names[i], "SLD") == 0 &&
+          values[i] && strlen(values[i]) > 0 && strcasecmp(sldenabled, "true") == 0)
+        msSLDApplySLDURL(map, values[i], -1, NULL, NULL);
+      else if (strcasecmp(names[i], "SLD_BODY") == 0 &&
+          values[i] && strlen(values[i]) > 0 && strcasecmp(sldenabled, "true") == 0)
+        msSLDApplySLD(map, values[i], -1, NULL, NULL);
+      else if (strcasecmp(names[i], "RULE") == 0)
+        psRule = values[i];
+      else if (strcasecmp(names[i], "STYLE") == 0)
+        pszStyle = values[i];
 #endif
-    /* -------------------------------------------------------------------- */
-    /*      SLD support:                                                    */
-    /*        - because the request parameter "sld_version" is required in  */
-    /*          in WMS 1.3.0, it will be set regardless of OGR support.     */
-    /* -------------------------------------------------------------------- */
-    else if(strcasecmp(names[i], "SLD_VERSION") == 0)
-      sld_version = values[i];
-  }
+      /* -------------------------------------------------------------------- */
+      /*      SLD support:                                                    */
+      /*        - because the request parameter "sld_version" is required in  */
+      /*          in WMS 1.3.0, it will be set regardless of OGR support.     */
+      /* -------------------------------------------------------------------- */
+      else if(strcasecmp(names[i], "SLD_VERSION") == 0)
+        sld_version = values[i];
+    }
 
-  if (!pszLayer) {
-    msSetError(MS_WMSERR, "Mandatory LAYER parameter missing in GetLegendGraphic request.", "msWMSGetLegendGraphic()");
-    return msWMSException(map, nVersion, "LayerNotDefined", wms_exception_format);
-  }
-  if (!pszFormat) {
-    msSetError(MS_WMSERR, "Mandatory FORMAT parameter missing in GetLegendGraphic request.", "msWMSGetLegendGraphic()");
-    return msWMSException(map, nVersion, "InvalidFormat", wms_exception_format);
-  }
+    if (!pszLayer) {
+      msSetError(MS_WMSERR, "Mandatory LAYER parameter missing in GetLegendGraphic request.", "msWMSGetLegendGraphic()");
+      return msWMSException(map, nVersion, "LayerNotDefined", wms_exception_format);
+    }
+    if (!pszFormat) {
+      msSetError(MS_WMSERR, "Mandatory FORMAT parameter missing in GetLegendGraphic request.", "msWMSGetLegendGraphic()");
+      return msWMSException(map, nVersion, "InvalidFormat", wms_exception_format);
+    }
 
-  if (nVersion >= OWS_1_3_0 && sld_version == NULL) {
-    msSetError(MS_WMSERR, "Missing required parameter SLD_VERSION", "GetLegendGraphic()");
-    return msWMSException(map, nVersion, "MissingParameterValue", wms_exception_format);
-  }
-  if (nVersion >= OWS_1_3_0 && strcasecmp(sld_version, "1.1.0") != 0) {
-    msSetError(MS_WMSERR, "SLD_VERSION must be 1.1.0", "GetLegendGraphic()");
-    return msWMSException(map, nVersion, "InvalidParameterValue", wms_exception_format);
-  }
+    if (nVersion >= OWS_1_3_0 && sld_version == NULL) {
+      msSetError(MS_WMSERR, "Missing required parameter SLD_VERSION", "GetLegendGraphic()");
+      return msWMSException(map, nVersion, "MissingParameterValue", wms_exception_format);
+    }
+    if (nVersion >= OWS_1_3_0 && strcasecmp(sld_version, "1.1.0") != 0) {
+      msSetError(MS_WMSERR, "SLD_VERSION must be 1.1.0", "GetLegendGraphic()");
+      return msWMSException(map, nVersion, "InvalidParameterValue", wms_exception_format);
+    }
 
-  nestedGroups = (char***)msSmallCalloc(map->numlayers, sizeof(char**));
-  numNestedGroups = (int*)msSmallCalloc(map->numlayers, sizeof(int));
-  isUsedInNestedGroup = (int*)msSmallCalloc(map->numlayers, sizeof(int));
-  msWMSPrepareNestedGroups(map, nVersion, nestedGroups, numNestedGroups, isUsedInNestedGroup);
+    nestedGroups = (char***)msSmallCalloc(map->numlayers, sizeof(char**));
+    numNestedGroups = (int*)msSmallCalloc(map->numlayers, sizeof(int));
+    isUsedInNestedGroup = (int*)msSmallCalloc(map->numlayers, sizeof(int));
+    msWMSPrepareNestedGroups(map, nVersion, nestedGroups, numNestedGroups, isUsedInNestedGroup);
 
-  /* check if layer name is valid. we check for layer's and group's name */
-  /* as well as wms_layer_group names */
-  for (i=0; i<map->numlayers; i++) {
-    lp = GET_LAYER(map, i);
-    if (  ((map->name && strcasecmp(map->name, pszLayer) == 0) ||
-           (lp->name && strcasecmp(lp->name, pszLayer) == 0) ||
-           (lp->group && strcasecmp(lp->group, pszLayer) == 0) ||
-           ((numNestedGroups[i] >0) && (msStringInArray(pszLayer, nestedGroups[i], numNestedGroups[i]))) ) &&
+    /* check if layer name is valid. we check for layer's and group's name */
+    /* as well as wms_layer_group names */
+    for (i=0; i<map->numlayers; i++) {
+      lp = GET_LAYER(map, i);
+      if (  ((map->name && strcasecmp(map->name, pszLayer) == 0) ||
+          (lp->name && strcasecmp(lp->name, pszLayer) == 0) ||
+          (lp->group && strcasecmp(lp->group, pszLayer) == 0) ||
+          ((numNestedGroups[i] >0) && (msStringInArray(pszLayer, nestedGroups[i], numNestedGroups[i]))) ) &&
           (msIntegerInArray(lp->index, ows_request->enabled_layers, ows_request->numlayers)) ) {
-      nLayers++;
-      lp->status = MS_ON;
-      iLayerIndex = i;
-      if (GET_LAYER(map, i)->connectiontype == MS_WMS) {
-        /* we do not cascade a wms layer if it contains at least
-         * one class with the property name set */
-        wms_layer = MS_TRUE;
-        for (j=0; j<lp->numclasses; j++) {
-          if (lp->class[j]->name != NULL && strlen(lp->class[j]->name)>0) {
-            wms_layer = MS_FALSE;
-            break;
+        nLayers++;
+        lp->status = MS_ON;
+        iLayerIndex = i;
+        if (GET_LAYER(map, i)->connectiontype == MS_WMS) {
+          /* we do not cascade a wms layer if it contains at least
+           * one class with the property name set */
+          wms_layer = MS_TRUE;
+          for (j=0; j<lp->numclasses; j++) {
+            if (lp->class[j]->name != NULL && strlen(lp->class[j]->name)>0) {
+              wms_layer = MS_FALSE;
+              break;
+            }
           }
         }
-      }
-    } else
-      lp->status = MS_OFF;
-  }
+      } else
+        lp->status = MS_OFF;
+    }
 
-  /* free the stuff used for nested layers */
-  for (i = 0; i < map->numlayers; i++) {
-    if (numNestedGroups[i] > 0) {
-      msFreeCharArray(nestedGroups[i], numNestedGroups[i]);
+    /* free the stuff used for nested layers */
+    for (i = 0; i < map->numlayers; i++) {
+      if (numNestedGroups[i] > 0) {
+        msFreeCharArray(nestedGroups[i], numNestedGroups[i]);
+      }
+    }
+    free(nestedGroups);
+    free(numNestedGroups);
+    free(isUsedInNestedGroup);
+
+    if (nLayers == 0) {
+      msSetError(MS_WMSERR, "Invalid layer given in the LAYER parameter. A layer might be disabled for \
+this request. Check wms/ows_enable_request settings.",
+"msWMSGetLegendGraphic()");
+      return msWMSException(map, nVersion, "LayerNotDefined", wms_exception_format);
+    }
+
+
+    /* if SCALE was provided in request, calculate an extent and use a default width and height */
+    if ( psScale != NULL ) {
+      double scale, cellsize;
+
+      scale = atof(psScale);
+      map->width = 600;
+      map->height = 600;
+
+      cellsize = (scale/map->resolution)/msInchesPerUnit(map->units, 0.0);
+
+      map->extent.maxx = cellsize*map->width/2.0;
+      map->extent.maxy = cellsize*map->height/2.0;
+      map->extent.minx = -map->extent.maxx;
+      map->extent.miny = -map->extent.maxy;
+    }
+
+    /* It's a valid Cascading WMS GetLegendGraphic request */
+    if (wms_layer)
+      return msWMSLayerExecuteRequest(map, 1, 0, 0,
+          0, NULL, WMS_GETLEGENDGRAPHIC);
+
+    /*if STYLE is set, check if it is a valid style (valid = at least one
+    of the classes have a the group value equals to the style */
+    /*style is only validated when there is only one layer #3411*/
+    if (nLayers == 1 &&  pszStyle && strlen(pszStyle) > 0 && strcasecmp(pszStyle, "default") != 0) {
+      for (i=0; i<GET_LAYER(map, iLayerIndex)->numclasses; i++) {
+        if (GET_LAYER(map, iLayerIndex)->class[i]->group &&
+            strcasecmp(GET_LAYER(map, iLayerIndex)->class[i]->group, pszStyle) == 0)
+          break;
+      }
+
+      if (i == GET_LAYER(map, iLayerIndex)->numclasses) {
+        msSetError(MS_WMSERR, "style used in the STYLE parameter is not defined on the layer.",
+            "msWMSGetLegendGraphic()");
+        return msWMSException(map, nVersion, "StyleNotDefined", wms_exception_format);
+      } else {
+        msFree(GET_LAYER(map, iLayerIndex)->classgroup);
+        GET_LAYER(map, iLayerIndex)->classgroup = msStrdup(pszStyle);
+
+      }
+    }
+  } else {
+    /* extract the parameters we need */
+    for(i=0; map && i<numentries; i++) {
+      if (strcasecmp(names[i], "FORMAT") == 0)
+        pszFormat = values[i];
+      else if (strcasecmp(names[i], "RULE") == 0)
+        psRule = values[i];
     }
   }
-  free(nestedGroups);
-  free(numNestedGroups);
-  free(isUsedInNestedGroup);
-
-  if (nLayers == 0) {
-    msSetError(MS_WMSERR, "Invalid layer given in the LAYER parameter. A layer might be disabled for \
-this request. Check wms/ows_enable_request settings.",
-               "msWMSGetLegendGraphic()");
-    return msWMSException(map, nVersion, "LayerNotDefined", wms_exception_format);
-  }
-
   /* validate format */
 
   /*check to see if a predefined list is given*/
   format_list = msOWSLookupMetadata(&(map->web.metadata), "M","getlegendgraphic_formatlist");
   if (format_list) {
     psFormat = msOwsIsOutputFormatValid(map, pszFormat, &(map->web.metadata),
-                                        "M", "getlegendgraphic_formatlist");
+        "M", "getlegendgraphic_formatlist");
     if (psFormat == NULL) {
       msSetError(MS_IMGERR,
-                 "Unsupported output format (%s).",
-                 "msWMSGetLegendGraphic()",
-                 pszFormat);
+          "Unsupported output format (%s).",
+          "msWMSGetLegendGraphic()",
+          pszFormat);
       return msWMSException(map, nVersion, "InvalidFormat", wms_exception_format);
     }
   } else {
     psFormat = msSelectOutputFormat( map, pszFormat);
     if( psFormat == NULL || ! MS_RENDERER_PLUGIN(psFormat) )
       /* msDrawLegend and msCreateLegendIcon both switch the alpha channel to gd
-      ** after creation, so they can be called here without going through
-      ** the msAlphaGD2AGG functions */
+       ** after creation, so they can be called here without going through
+       ** the msAlphaGD2AGG functions */
     {
       msSetError(MS_IMGERR,
-                 "Unsupported output format (%s).",
-                 "msWMSGetLegendGraphic()",
-                 pszFormat);
+          "Unsupported output format (%s).",
+          "msWMSGetLegendGraphic()",
+          pszFormat);
       return msWMSException(map, nVersion, "InvalidFormat", wms_exception_format);
     }
   }
   msApplyOutputFormat(&(map->outputformat), psFormat, MS_NOOVERRIDE,
-                      MS_NOOVERRIDE, MS_NOOVERRIDE );
-
-  /* if SCALE was provided in request, calculate an extent and use a default width and height */
-  if ( psScale != NULL ) {
-    double scale, cellsize;
-
-    scale = atof(psScale);
-    map->width = 600;
-    map->height = 600;
-
-    cellsize = (scale/map->resolution)/msInchesPerUnit(map->units, 0.0);
-
-    map->extent.maxx = cellsize*map->width/2.0;
-    map->extent.maxy = cellsize*map->height/2.0;
-    map->extent.minx = -map->extent.maxx;
-    map->extent.miny = -map->extent.maxy;
-  }
+      MS_NOOVERRIDE, MS_NOOVERRIDE );
   
-  /* It's a valid Cascading WMS GetLegendGraphic request */
-  if (wms_layer)
-    return msWMSLayerExecuteRequest(map, 1, 0, 0,
-                                    0, NULL, WMS_GETLEGENDGRAPHIC);
-
-  /*if STYLE is set, check if it is a valid style (valid = at least one
-    of the classes have a the group value equals to the style */
-  /*style is only validated when there is only one layer #3411*/
-  if (nLayers == 1 &&  pszStyle && strlen(pszStyle) > 0 && strcasecmp(pszStyle, "default") != 0) {
-    for (i=0; i<GET_LAYER(map, iLayerIndex)->numclasses; i++) {
-      if (GET_LAYER(map, iLayerIndex)->class[i]->group &&
-          strcasecmp(GET_LAYER(map, iLayerIndex)->class[i]->group, pszStyle) == 0)
-        break;
-    }
-
-    if (i == GET_LAYER(map, iLayerIndex)->numclasses) {
-      msSetError(MS_WMSERR, "style used in the STYLE parameter is not defined on the layer.",
-                 "msWMSGetLegendGraphic()");
-      return msWMSException(map, nVersion, "StyleNotDefined", wms_exception_format);
-    } else {
-      msFree(GET_LAYER(map, iLayerIndex)->classgroup);
-      GET_LAYER(map, iLayerIndex)->classgroup = msStrdup(pszStyle);
-
-    }
-  }
-
   if ( psRule == NULL || nLayers > 1) {
     if ( psScale != NULL ) {
       /* Scale-dependent legend. map->scaledenom will be calculated in msDrawLegend */
-      img = msDrawLegend(map, MS_FALSE);
+      img = msDrawLegend(map, MS_FALSE, NULL);
     } else {
       /* Scale-independent legend */
-      img = msDrawLegend(map, MS_TRUE);
+      img = msDrawLegend(map, MS_TRUE, hittest);
     }
   } else {
     /* RULE was specified. Get the class corresponding to the RULE */
@@ -4637,7 +4575,7 @@ this request. Check wms/ows_enable_request settings.",
   if (img == NULL)
     return msWMSException(map, nVersion, NULL, wms_exception_format);
 
-  msIO_setHeader("Content-Type",MS_IMAGE_MIME_TYPE(map->outputformat));
+  msIO_setHeader("Content-Type", "%s", MS_IMAGE_MIME_TYPE(map->outputformat));
   msIO_sendHeaders();
   if (msSaveImage(map, img, NULL) != MS_SUCCESS)
     return msWMSException(map, nVersion, NULL, wms_exception_format);
@@ -4647,6 +4585,31 @@ this request. Check wms/ows_enable_request settings.",
   return(MS_SUCCESS);
 }
 
+/*
+** msWMSGetContentDependantLegend()
+*/
+int msWMSGetContentDependantLegend(mapObj *map, int nVersion, char **names, char **values, int numentries,
+                char *wms_exception_format, owsRequestObj *ows_request) {
+
+  int i,status;
+  map_hittest hittest;
+  /* turn off layer if WMS GetMap is not enabled */
+  for (i=0; i<map->numlayers; i++)
+    if (!msIntegerInArray(GET_LAYER(map, i)->index, ows_request->enabled_layers, ows_request->numlayers))
+      GET_LAYER(map, i)->status = MS_OFF;
+
+  initMapHitTests(map,&hittest);
+  status = msHitTestMap(map,&hittest);
+  if(status == MS_SUCCESS) {
+    status = msWMSLegendGraphic(map,nVersion,names,values,numentries,wms_exception_format,ows_request,&hittest);
+  }
+  freeMapHitTests(map,&hittest);
+  if(status != MS_SUCCESS) {
+    return msWMSException(map, nVersion, NULL, wms_exception_format);
+  } else {
+    return MS_SUCCESS;
+  }
+}
 
 /*
 ** msWMSGetStyles() : return an SLD document for all layers that
@@ -4661,20 +4624,17 @@ int msWMSGetStyles(mapObj *map, int nVersion, char **names,
   int numlayers = 0;
   char **layers = NULL;
   char  *sld = NULL;
-  const char *encoding;
 
   char ***nestedGroups = NULL;
   int *numNestedGroups = NULL;
   int *isUsedInNestedGroup = NULL;
-
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "MO", "encoding");
 
   nestedGroups = (char***)msSmallCalloc(map->numlayers, sizeof(char**));
   numNestedGroups = (int*)msSmallCalloc(map->numlayers, sizeof(int));
   isUsedInNestedGroup = (int*)msSmallCalloc(map->numlayers, sizeof(int));
   msWMSPrepareNestedGroups(map, nVersion, nestedGroups, numNestedGroups, isUsedInNestedGroup);
 
-  for(i=0; map && i<numentries; i++) {
+  for(i=0; i<numentries; i++) {
     /* getMap parameters */
     if (strcasecmp(names[i], "LAYERS") == 0) {
       layers = msStringSplit(values[i], ',', &numlayers);
@@ -4725,18 +4685,12 @@ this request. Check wms/ows_enable_request settings.",
   }
 
   if (nVersion <= OWS_1_1_1) {
-    if (encoding)
-      msIO_setHeader("Content-Type","application/vnd.ogc.sld+xml; charset=%s", encoding);
-    else
-      msIO_setHeader("Content-Type","application/vnd.ogc.sld+xml");
+    msIO_setHeader("Content-Type","application/vnd.ogc.sld+xml; charset=UTF-8");
     msIO_sendHeaders();
     sld = msSLDGenerateSLD(map, -1, "1.0.0");
   } else {
     /*for wms 1.3.0 generate a 1.1 sld*/
-    if (encoding)
-      msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-    else
-      msIO_setHeader("Content-Type","text/xml");
+    msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
     msIO_sendHeaders();
     sld = msSLDGenerateSLD(map, -1, "1.1.0");
   }
@@ -4751,22 +4705,13 @@ this request. Check wms/ows_enable_request settings.",
 int msWMSGetSchemaExtension(mapObj *map)
 {
   char *schemalocation = NULL;
-  const char *encoding;
 
   schemalocation = msEncodeHTMLEntities(msOWSGetSchemasLocation(map));
 
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "MO", "encoding");
-
-  if (encoding)
-    msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-  else
-    msIO_setHeader("Content-Type","text/xml");
+  msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
   msIO_sendHeaders();
 
-  msOWSPrintEncodeMetadata(stdout, &(map->web.metadata),
-                           "MO", "encoding", OWS_NOERR,
-                           "<?xml version='1.0' encoding=\"%s\"?>\n",
-                           "ISO-8859-1");
+  msIO_printf("<?xml version='1.0' encoding=\"UTF-8\"?>\n");
   msIO_printf("<schema xmlns=\"http://www.w3.org/2001/XMLSchema\" xmlns:wms=\"http://www.opengis.net/wms\" xmlns:ms=\"http://mapserver.gis.umn.edu/mapserver\" targetNamespace=\"http://mapserver.gis.umn.edu/mapserver\" elementFormDefault=\"qualified\" version=\"1.0.0\">\n");
   msIO_printf("  <import namespace=\"http://www.opengis.net/wms\" schemaLocation=\"%s/wms/1.3.0/capabilities_1_3_0.xsd\"/>\n", schemalocation);
   msIO_printf("  <element name=\"GetStyles\" type=\"wms:OperationType\" substitutionGroup=\"wms:_ExtendedOperation\"/>\n");
@@ -4791,13 +4736,10 @@ int msWMSGetSchemaExtension(mapObj *map)
 int msWMSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request, int force_wms_mode)
 {
 #ifdef USE_WMS_SVR
-  int i, status, nVersion=OWS_VERSION_NOTSET;
+  int i, status, nVersion=OWS_VERSION_NOTSET, isContentDependantLegend = 0;
   const char *version=NULL, *request=NULL, *service=NULL, *format=NULL, *updatesequence=NULL, *language=NULL;
-  const char * encoding;
   char *wms_exception_format = NULL;
   char *validated_language = NULL;
-
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "MO", "encoding");
 
   /*
   ** Process Params common to all requests
@@ -4878,7 +4820,10 @@ int msWMSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request, i
       msSetError(MS_WMSERR, "WMS request not enabled. Check wms/ows_enable_request settings.", "msWMSGetCapabilities()");
       return msWMSException(map, nVersion, NULL, wms_exception_format);
     }
-    return msWMSGetCapabilities(map, nVersion, req, ows_request, updatesequence, wms_exception_format, language);
+    msAcquireLock(TLOCK_WxS);
+    status=msWMSGetCapabilities(map, nVersion, req, ows_request, updatesequence, wms_exception_format, language);
+    msReleaseLock(TLOCK_WxS);
+    return status;
   } else if (request && (strcasecmp(request, "context") == 0 ||
                          strcasecmp(request, "GetContext") == 0) ) {
     /* Return a context document with all layers in this mapfile
@@ -4909,10 +4854,7 @@ int msWMSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request, i
     if ((status = msOWSMakeAllLayersUnique(map)) != MS_SUCCESS)
       return msWMSException(map, nVersion, NULL, wms_exception_format);
 
-    if (encoding)
-      msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-    else
-      msIO_setHeader("Content-Type","text/xml");
+    msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
     msIO_sendHeaders();
 
     if ( msWriteMapContext(map, stdout) != MS_SUCCESS )
@@ -4922,10 +4864,7 @@ int msWMSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request, i
   } else if (request && strcasecmp(request, "GetMap") == 0 &&
              format && strcasecmp(format,  "image/txt") == 0) {
     /* Until someone adds full support for ASCII graphics this should do. ;) */
-    if (encoding)
-      msIO_setHeader("Content-Type","text/plain; charset=%s", encoding);
-    else
-      msIO_setHeader("Content-Type","text/plain");
+    msIO_setHeader("Content-Type","text/plain; charset=UTF-8");
     msIO_sendHeaders();
     msIO_printf(".\n               ,,ggddY\"\"\"Ybbgg,,\n          ,agd888b,_ "
                 "\"Y8, ___'\"\"Ybga,\n       ,gdP\"\"88888888baa,.\"\"8b    \""
@@ -5003,9 +4942,35 @@ int msWMSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request, i
   if ((status = msOWSMakeAllLayersUnique(map)) != MS_SUCCESS)
     return msWMSException(map, nVersion, NULL, wms_exception_format);
 
-  if (strcasecmp(request, "GetLegendGraphic") == 0)
-    return msWMSLegendGraphic(map, nVersion, req->ParamNames, req->ParamValues, req->NumParams,
-                              wms_exception_format, ows_request);
+  if (strcasecmp(request, "GetLegendGraphic") == 0) {
+    /*
+     * check for a BBOX in the request, in that case we have a content-dependant legend request,
+     * and should be following the GetMap path a bit more
+     */
+    for(i=0; i<req->NumParams; i++) {
+      if(strcasecmp(req->ParamNames[i], "BBOX") == 0) {
+        if(req->ParamValues[i] && *req->ParamValues[i]) {
+          break;
+        }
+      }
+    }
+    if(i != req->NumParams) {
+      isContentDependantLegend = 1;
+      /* getLegendGraphic uses LAYER= , we need to create a LAYERS= value that is identical
+       * we'll suppose that the client is conformat and hasn't included a LAYERS= parameter
+       * in its request */
+      for(i=0; i<req->NumParams; i++) {
+        if(strcasecmp(req->ParamNames[i], "LAYER") == 0) {
+          req->ParamNames[req->NumParams] = msStrdup("LAYERS");
+          req->ParamValues[req->NumParams] = msStrdup(req->ParamValues[i]);
+          req->NumParams++;
+        }
+      }
+    } else {
+      return msWMSLegendGraphic(map, nVersion, req->ParamNames, req->ParamValues, req->NumParams,
+                              wms_exception_format, ows_request, NULL);
+    }
+  }
 
   if (strcasecmp(request, "GetStyles") == 0)
     return msWMSGetStyles(map, nVersion, req->ParamNames, req->ParamValues, req->NumParams,
@@ -5014,9 +4979,9 @@ int msWMSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request, i
   else if (request && strcasecmp(request, "GetSchemaExtension") == 0)
     return msWMSGetSchemaExtension(map);
 
-  /* getMap parameters are used by both getMap and getFeatureInfo */
+  /* getMap parameters are used by both getMap, getFeatureInfo, and content dependant legendgraphics */
   if (strcasecmp(request, "map") == 0 || strcasecmp(request, "GetMap") == 0 ||
-      strcasecmp(request, "feature_info") == 0 || strcasecmp(request, "GetFeatureInfo") == 0 || strcasecmp(request, "DescribeLayer") == 0) {
+      strcasecmp(request, "feature_info") == 0 || strcasecmp(request, "GetFeatureInfo") == 0 || strcasecmp(request, "DescribeLayer") == 0 || isContentDependantLegend) {
 
     status = msWMSLoadGetMapParams(map, nVersion, req->ParamNames, req->ParamValues, req->NumParams,
                                    wms_exception_format, request, ows_request);
@@ -5026,11 +4991,7 @@ int msWMSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request, i
   /* This function owns validated_language, so remember to free it later*/
   validated_language = msOWSGetLanguageFromList(map, "MO", language);
   if (validated_language != NULL) {
-    for(i=0; i<map->numlayers; i++) {
-      layerObj *layer = GET_LAYER(map, i);
-      if(layer->data) layer->data = msCaseReplaceSubstring(layer->data, "%language%", validated_language);
-      if(layer->connection) layer->connection = msCaseReplaceSubstring(layer->connection, "%language%", validated_language);
-    }
+    msMapSetLanguageSpecificConnection(map, validated_language);
   }
   msFree(validated_language);
 
@@ -5041,6 +5002,8 @@ int msWMSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request, i
   else if (strcasecmp(request, "DescribeLayer") == 0) {
     return msWMSDescribeLayer(map, nVersion, req->ParamNames, req->ParamValues, req->NumParams,
                               wms_exception_format);
+  } else if (isContentDependantLegend) {
+    return msWMSGetContentDependantLegend(map,nVersion, req->ParamNames, req->ParamValues, req->NumParams, wms_exception_format, ows_request);
   }
 
   /* Hummmm... incomplete or unsupported WMS request */

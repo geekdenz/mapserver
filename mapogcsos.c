@@ -80,9 +80,7 @@ static int msSOSException(mapObj *map, char *locator, char *exceptionCode)
 {
   int size = 0;
   char *errorString     = NULL;
-  char *errorMessage    = NULL;
   char *schemasLocation = NULL;
-  const char *encoding;
 
   xmlDocPtr  psDoc      = NULL;
   xmlNodePtr psRootNode = NULL;
@@ -91,32 +89,26 @@ static int msSOSException(mapObj *map, char *locator, char *exceptionCode)
 
   psNsOws = xmlNewNs(NULL, BAD_CAST "http://www.opengis.net/ows/1.1", BAD_CAST "ows");
 
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "SO", "encoding");
   errorString = msGetErrorString("\n");
-  errorMessage = msEncodeHTMLEntities(errorString);
   schemasLocation = msEncodeHTMLEntities(msOWSGetSchemasLocation(map));
 
   psDoc = xmlNewDoc(BAD_CAST "1.0");
 
-  psRootNode = msOWSCommonExceptionReport(psNsOws, OWS_1_1_0, schemasLocation, pszSOSVersion, msOWSGetLanguage(map, "exception"), exceptionCode, locator, errorMessage);
+  psRootNode = msOWSCommonExceptionReport(psNsOws, OWS_1_1_0, schemasLocation, pszSOSVersion, msOWSGetLanguage(map, "exception"), exceptionCode, locator, errorString);
 
   xmlDocSetRootElement(psDoc, psRootNode);
 
   xmlNewNs(psRootNode, BAD_CAST "http://www.opengis.net/ows/1.1", BAD_CAST "ows");
 
-  if (encoding)
-    msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-  else
-    msIO_setHeader("Content-Type","text/xml");
+  msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
   msIO_sendHeaders();
 
-  xmlDocDumpFormatMemoryEnc(psDoc, &buffer, &size, (encoding ? encoding : "ISO-8859-1"), 1);
+  xmlDocDumpFormatMemoryEnc(psDoc, &buffer, &size, ("UTF-8"), 1);
 
   msIO_printf("%s", buffer);
 
   /*free buffer and the document */
   free(errorString);
-  free(errorMessage);
   free(schemasLocation);
   xmlFree(buffer);
   xmlFreeDoc(psDoc);
@@ -426,12 +418,14 @@ void  msSOSAddGeometryNode(xmlNsPtr psNsGml, xmlNsPtr psNsMs, xmlNodePtr psParen
 
           pszTmp = NULL;
           for(j=0; j<psShape->line[i].numpoints; j++) {
-            pszTmp = msStringConcatenate(pszTmp,
-                                         msDoubleToString(psShape->line[i].point[j].x, MS_TRUE));
+            char *doubleTmp = msDoubleToString(psShape->line[i].point[j].x, MS_TRUE);
+            pszTmp = msStringConcatenate(pszTmp, doubleTmp);
             pszTmp = msStringConcatenate(pszTmp, ",");
-            pszTmp = msStringConcatenate(pszTmp,
-                                         msDoubleToString(psShape->line[i].point[j].y, MS_TRUE));
-            pszTmp = msStringConcatenate(pszTmp, " ");
+            free(doubleTmp);
+            doubleTmp = msDoubleToString(psShape->line[i].point[j].y, MS_TRUE);
+            pszTmp = msStringConcatenate(pszTmp, doubleTmp);
+            pszTmp = msStringConcatenate(pszTmp, ",");
+            free(doubleTmp);
           }
           psNode = xmlNewChild(psNode, NULL, BAD_CAST "coordinates", BAD_CAST pszTmp);
           xmlSetNs(psNode,xmlNewNs(psNode, BAD_CAST "http://www.opengis.net/gml", BAD_CAST "gml"));
@@ -486,15 +480,15 @@ void  msSOSAddGeometryNode(xmlNsPtr psNsGml, xmlNsPtr psNsMs, xmlNodePtr psParen
 
           pszTmp = NULL;
           for(j=0; j<psShape->line[i].numpoints; j++) {
-
-            pszTmp =
-              msStringConcatenate(pszTmp,
-                                  msDoubleToString(psShape->line[i].point[j].x, MS_TRUE));
+            char *doubleTmp;
+            doubleTmp = msDoubleToString(psShape->line[i].point[j].x, MS_TRUE);
+            pszTmp = msStringConcatenate(pszTmp, doubleTmp);
             pszTmp = msStringConcatenate(pszTmp, ",");
-            pszTmp =
-              msStringConcatenate(pszTmp,
-                                  msDoubleToString(psShape->line[i].point[j].y, MS_TRUE));
+            free(doubleTmp);
+            doubleTmp = msDoubleToString(psShape->line[i].point[j].y, MS_TRUE);
+            pszTmp = msStringConcatenate(pszTmp, doubleTmp);
             pszTmp = msStringConcatenate(pszTmp, " ");
+            free(doubleTmp);
           }
           psNode = xmlNewChild(psNode, NULL, BAD_CAST "coordinates", BAD_CAST pszTmp);
           xmlSetNs(psNode,xmlNewNs(psNode,
@@ -851,9 +845,8 @@ void msSOSAddMemberNode(xmlNsPtr psNsGml, xmlNsPtr psNsOm, xmlNsPtr psNsSwe, xml
       if (lp->index != lpfirst->index)
         msLayerClose(lpfirst);
     }
+    msFreeShape(&sShape);
   }
-
-  msFreeShape(&sShape);
 }
 
 /************************************************************************/
@@ -1109,7 +1102,6 @@ int msSOSGetCapabilities(mapObj *map, sosParamsObj *sosparams, cgiRequestObj *re
   char *xsi_schemaLocation = NULL;
   char *script_url=NULL;
   const char *updatesequence=NULL;
-  const char *encoding;
 
   int i,j,k;
   layerObj *lp = NULL, *lpTmp = NULL;
@@ -1164,7 +1156,7 @@ int msSOSGetCapabilities(mapObj *map, sosParamsObj *sosparams, cgiRequestObj *re
       iVersion = msOWSParseVersionString(tokens[i]);
 
       if (iVersion == -1) {
-        msSetError(MS_SOSERR, "Invalid version format.", "msSOSGetCapabilities()", tokens[i]);
+        msSetError(MS_SOSERR, "Invalid version format : %s.", "msSOSGetCapabilities()", tokens[i]);
         msFreeCharArray(tokens, j);
         return msSOSException(map, "acceptversions", "VersionNegotiationFailed");
       }
@@ -1185,7 +1177,6 @@ int msSOSGetCapabilities(mapObj *map, sosParamsObj *sosparams, cgiRequestObj *re
 
   /* updateSequence */
   updatesequence = msOWSLookupMetadata(&(map->web.metadata), "SO", "updatesequence");
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "SO", "encoding");
 
   if (sosparams->pszUpdateSequence != NULL) {
     i = msOWSNegotiateUpdateSequence(sosparams->pszUpdateSequence, updatesequence);
@@ -1247,10 +1238,10 @@ int msSOSGetCapabilities(mapObj *map, sosParamsObj *sosparams, cgiRequestObj *re
   xmlAddChild(psRootNode, xmlNewComment(BAD_CAST msGetVersion()));
 
   /*service identification*/
-  xmlAddChild(psRootNode, msOWSCommonServiceIdentification(psNsOws, map, "SOS", pszSOSVersion, "SO"));
+  xmlAddChild(psRootNode, msOWSCommonServiceIdentification(psNsOws, map, "SOS", pszSOSVersion, "SO", NULL));
 
   /*service provider*/
-  xmlAddChild(psRootNode, msOWSCommonServiceProvider(psNsOws, psNsXLink, map, "SO"));
+  xmlAddChild(psRootNode, msOWSCommonServiceProvider(psNsOws, psNsXLink, map, "SO", NULL));
 
   /*operation metadata */
 
@@ -1605,10 +1596,7 @@ int msSOSGetCapabilities(mapObj *map, sosParamsObj *sosparams, cgiRequestObj *re
   if ( msIO_needBinaryStdout() == MS_FAILURE )
     return MS_FAILURE;
 
-  if (encoding)
-    msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-  else
-    msIO_setHeader("Content-Type","text/xml");
+  msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
   msIO_sendHeaders();
 
   /*TODO* : check the encoding validity. Internally libxml2 uses UTF-8
@@ -1624,7 +1612,7 @@ int msSOSGetCapabilities(mapObj *map, sosParamsObj *sosparams, cgiRequestObj *re
 
   context = msIO_getHandler(stdout);
 
-  xmlDocDumpFormatMemoryEnc(psDoc, &buffer, &size, (encoding ? encoding : "ISO-8859-1"), 1);
+  xmlDocDumpFormatMemoryEnc(psDoc, &buffer, &size, ("UTF-8"), 1);
   msIO_contextWrite(context, buffer, size);
   xmlFree(buffer);
 
@@ -1718,7 +1706,6 @@ int msSOSGetObservation(mapObj *map, sosParamsObj *sosparams, cgiRequestObj *req
   xmlNodePtr psObservationNode = NULL, psResultNode=NULL;
   const char *pszProcedure = NULL;
   const char *pszBlockSep=NULL;
-  const char *encoding;
   char *pszResult=NULL;
   int nDiffrentProc = 0;
   SOSProcedureNode *paDiffrentProc = NULL;
@@ -1731,7 +1718,6 @@ int msSOSGetObservation(mapObj *map, sosParamsObj *sosparams, cgiRequestObj *req
 
   /* establish local namespace */
   pszTmp = msOWSLookupMetadata(&(map->web.metadata), "SFO", "namespace_uri");
-  encoding = msOWSLookupMetadata(&(map->web.metadata), "SO", "encoding");
 
   if(pszTmp) user_namespace_uri = pszTmp;
 
@@ -2127,13 +2113,14 @@ this request. Check sos/ows_enable_request settings.", "msSOSGetObservation()", 
 
       if (tokens && n > 0) {
         for (k=0; k<n; k++) {
-          if (strcasecmp(sosparams->pszSrsName, tokens[k]) == 0) { /* match */
+          if (strncasecmp(tokens[k], "EPSG:", strlen("EPSG:")) == 0 &&
+              strcasecmp(sosparams->pszSrsName, tokens[k]) == 0) { /* match */
             bFound = 1;
 
             /* project MAP.EXTENT to this SRS */
             msInitProjection(&po);
 
-            snprintf(srsbuffer, sizeof(srsbuffer), "+init=epsg:%.20s", sosparams->pszSrsName+5);
+            snprintf(srsbuffer, sizeof(srsbuffer), "+init=epsg:%.20s", sosparams->pszSrsName+strlen("EPSG:"));
 
             if (msLoadProjectionString(&po, srsbuffer) != 0) {
               msSetError(MS_SOSERR, "Could not set output projection to \"%s\"", "msSOSGetObservation()", sosparams->pszSrsName);
@@ -2184,7 +2171,7 @@ this request. Check sos/ows_enable_request settings.", "msSOSGetObservation()", 
       lp = GET_LAYER(map, i);
       if (lp->status == MS_ON) {
         /* preparse parser so that alias for fields can be used */
-        FLTPreParseFilterForAlias(psFilterNode, map, i, "S");
+        FLTPreParseFilterForAliasAndGroup(psFilterNode, map, i, "S");
         /* validate that the property names used are valid
           (there is a corresponding layer attribute) */
         if (msLayerOpen(lp) == MS_SUCCESS && msLayerGetItems(lp) == MS_SUCCESS) {
@@ -2457,14 +2444,11 @@ this request. Check sos/ows_enable_request settings.", "msSOSGetObservation()", 
   }
 
   /* output results */
-  if (encoding)
-    msIO_setHeader("Content-Type","text/xml; charset=%s", encoding);
-  else
-    msIO_setHeader("Content-Type","text/xml");
+  msIO_setHeader("Content-Type","text/xml; charset=UTF-8");
   msIO_sendHeaders();
 
   context = msIO_getHandler(stdout);
-  xmlDocDumpFormatMemoryEnc(psDoc, &buffer, &size, (encoding ? encoding : "ISO-8859-1"), 1);
+  xmlDocDumpFormatMemoryEnc(psDoc, &buffer, &size, ("UTF-8"), 1);
   msIO_contextWrite(context, buffer, size);
   free(schemalocation);
   free(xsi_schemaLocation);
@@ -2710,8 +2694,11 @@ int msSOSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request)
   int returnvalue = MS_DONE;
   sosParamsObj *paramsObj = (sosParamsObj *)calloc(1, sizeof(sosParamsObj));
 
-  if (msSOSParseRequest(map, req, paramsObj) == MS_FAILURE)
+  if (msSOSParseRequest(map, req, paramsObj) == MS_FAILURE) {
+    msSOSFreeParamsObj(paramsObj);
+    free(paramsObj);
     return MS_FAILURE;
+  }
 
   /* SERVICE must be specified and be SOS */
   if (paramsObj->pszService && strcasecmp(paramsObj->pszService, "SOS") == 0) { /* this is an SOS request */
@@ -2781,8 +2768,11 @@ int msSOSDispatch(mapObj *map, cgiRequestObj *req, owsRequestObj *ows_request)
       paramsObj = NULL;
       return msSOSException(map, "request", "InvalidParameterValue");
     }
-  } else
+  } else {
+    msSOSFreeParamsObj(paramsObj);
+    free(paramsObj);
     return MS_DONE;  /* Not an SOS request */
+  }
 #else
   msSetError(MS_SOSERR, "SOS support is not available.", "msSOSDispatch()");
   return(MS_FAILURE);
@@ -3013,7 +3003,7 @@ int msSOSParseRequest(mapObj *map, cgiRequestObj *request, sosParamsObj *sospara
     psXPathTmp = msLibXml2GetXPath(doc, context, (xmlChar *)"/sos:GetObservation/sos:result/child::*");
 
     if (psXPathTmp) {
-      sosparams->pszResult = msStrdup(msLibXml2GetXPathTree(doc, psXPathTmp));
+      sosparams->pszResult = msLibXml2GetXPathTree(doc, psXPathTmp);
       pszTmp = msStringConcatenate(pszTmp, "<ogc:Filter>");
       pszTmp = msStringConcatenate(pszTmp, sosparams->pszResult);
       pszTmp = msStringConcatenate(pszTmp, "</ogc:Filter>");

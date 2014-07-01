@@ -4,3 +4,5 @@ nbproject
 tags
 tests/map.png
 
+packager/deb/
+packager/root/
